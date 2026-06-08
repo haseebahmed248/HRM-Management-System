@@ -1,0 +1,158 @@
+<?php
+
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Settings\PasswordController;
+use App\Http\Controllers\Settings\ProfileController;
+use App\Http\Controllers\Settings\EmailSettingController;
+use App\Http\Controllers\Settings\SettingsController;
+use App\Http\Controllers\Settings\SystemSettingsController;
+use App\Http\Controllers\Settings\CurrencySettingController;
+use App\Http\Controllers\PlanOrderController;
+use App\Http\Controllers\Settings\PaymentSettingController;
+use App\Http\Controllers\Settings\WebhookController;
+use App\Http\Controllers\StripePaymentController;
+use App\Http\Controllers\PayPalPaymentController;
+use App\Http\Controllers\BankPaymentController;
+use App\Http\Controllers\ExperienceCertificateTemplateController;
+use App\Http\Controllers\IpRestrictionController;
+use App\Http\Controllers\JoiningLetterTemplateController;
+use App\Http\Controllers\NocTemplateController;
+use App\Http\Controllers\Settings\WorkingDaysSettingController;
+use App\Http\Controllers\ZektoSettingsController;
+use Inertia\Inertia;
+
+/*
+|--------------------------------------------------------------------------
+| Settings Routes
+|--------------------------------------------------------------------------
+|
+| Here are the routes for settings management
+|
+*/
+
+// Payment routes accessible without plan check
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/payment-methods', [PaymentSettingController::class, 'getPaymentMethods'])->name('payment.methods');
+    Route::get('/enabled-payment-methods', [PaymentSettingController::class, 'getEnabledMethods'])->name('payment.enabled-methods');
+    Route::post('/plan-orders', [PlanOrderController::class, 'create'])->name('plan-orders.create');
+    Route::post('/stripe-payment', [StripePaymentController::class, 'processPayment'])->name('settings.stripe.payment');
+});
+
+Route::middleware(['auth', 'verified', 'plan.access'])->group(function () {
+    // Payment Settings (admin only)
+    Route::post('/payment-settings', [PaymentSettingController::class, 'store'])->name('payment.settings');
+
+    // Profile settings page with profile and password sections
+    Route::get('profile', function () {
+        return Inertia::render('settings/profile-settings');
+    })->name('profile');
+
+    // Routes for form submissions
+    Route::patch('profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('profile', [ProfileController::class, 'update']); // For file uploads with method spoofing
+    Route::delete('profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::put('profile/password', [PasswordController::class, 'update'])->name('password.update');
+
+    // Email settings page
+    Route::get('settings/email', function () {
+        return Inertia::render('settings/components/email-settings');
+    })->name('settings.email');
+
+    // Email settings routes
+    Route::get('settings/email/get', [EmailSettingController::class, 'getEmailSettings'])->name('settings.email.get');
+    Route::post('settings/email/update', [EmailSettingController::class, 'updateEmailSettings'])->name('settings.email.update');
+    Route::post('settings/email/test', [EmailSettingController::class, 'sendTestEmail'])->name('settings.email.test');
+
+    // General settings page with system and company settings
+    Route::get('settings', [SettingsController::class, 'index'])->name('settings');
+
+    // System Settings routes
+    Route::post('settings/system', [SystemSettingsController::class, 'update'])->name('settings.system.update');
+    Route::post('settings/brand', [SystemSettingsController::class, 'updateBrand'])->name('settings.brand.update');
+    Route::post('settings/storage', [SystemSettingsController::class, 'updateStorage'])->name('settings.storage.update');
+    Route::post('settings/recaptcha', [SystemSettingsController::class, 'updateRecaptcha'])->name('settings.recaptcha.update');
+    Route::post('settings/chatgpt', [SystemSettingsController::class, 'updateChatgpt'])->name('settings.chatgpt.update');
+    Route::post('settings/cookie', [SystemSettingsController::class, 'updateCookie'])->name('settings.cookie.update');
+    Route::post('settings/seo', [SystemSettingsController::class, 'updateSeo'])->name('settings.seo.update');
+    Route::post('settings/cache/clear', [SystemSettingsController::class, 'clearCache'])->name('settings.cache.clear');
+
+    // Currency Settings routes
+    Route::post('settings/currency', [CurrencySettingController::class, 'update'])->name('settings.currency.update');
+
+    // Working Days Settings routes
+    Route::get('settings/working-days/get', [WorkingDaysSettingController::class, 'getWorkingDaysSettings'])->name('settings.working-days.get');
+    Route::post('settings/working-days/update', [WorkingDaysSettingController::class, 'updateWorkingDaysSettings'])->name('settings.working-days.update');
+
+    // Webhook Settings routes
+    Route::get('settings/webhooks', [WebhookController::class, 'index'])->name('settings.webhooks.index');
+    Route::post('settings/webhooks', [WebhookController::class, 'store'])->name('settings.webhooks.store');
+    Route::put('settings/webhooks/{webhook}', [WebhookController::class, 'update'])->name('settings.webhooks.update');
+    Route::delete('settings/webhooks/{webhook}', [WebhookController::class, 'destroy'])->name('settings.webhooks.destroy');
+
+    // Google Calendar Settings routes
+    Route::post('settings/google-calendar', [SystemSettingsController::class, 'updateGoogleCalendar'])->name('settings.google-calendar.update');
+
+    // IP Restriction Settings routes
+    Route::middleware('permission:manage-ip-restriction-settings')->group(function () {
+        Route::post('ip-restrictions', [IpRestrictionController::class, 'store'])->name('ip-restrictions.store');
+        Route::put('ip-restrictions/{ipRestriction}', [IpRestrictionController::class, 'update'])->name('ip-restrictions.update');
+        Route::delete('ip-restrictions/{ipRestriction}', [IpRestrictionController::class, 'destroy'])->name('ip-restrictions.destroy');
+    });
+
+    // Zekto Settings routes
+    Route::middleware('permission:manage-biomatric-attedance-settings')->group(function () {
+        Route::post('settings/zekto/update', [ZektoSettingsController::class, 'update'])->name('settings.zekto.update');
+        Route::post('settings/zekto/generate-token', [ZektoSettingsController::class, 'generateToken'])->name('settings.zekto.generate-token');
+    });
+
+    // NOC Settings routes
+    Route::middleware('permission:update-noc')->group(function () {
+        Route::post('settings/noc/update', [NocTemplateController::class, 'update'])->name('settings.noc.update');
+    });
+
+    // Joining Letter Settings routes
+    Route::middleware('permission:update-joining-letter')->group(function () {
+        Route::post('settings/joining-letter/update', [JoiningLetterTemplateController::class, 'update'])->name('settings.joining-letter.update');
+    });
+
+    // Experience Certificate Settings routes
+    Route::middleware('permission:update-experience-certificate')->group(function () {
+        Route::post('settings/experience-certificate/update', [ExperienceCertificateTemplateController::class, 'update'])->name('settings.experience-certificate.update');
+    });
+
+    
+    // Zambia Tax Settings routes
+Route::post('settings/zambia-tax/update',
+    [\App\Http\Controllers\Settings\ZambiaTaxSettingController::class, 'update']
+)->name('settings.zambia-tax.update');
+
+    // Zambia Compliance Reports — uses manage-payroll-runs permission (HR already has this)
+    Route::middleware('permission:manage-payroll-runs')->group(function () {
+        Route::get('hr/zambia-reports', [\App\Http\Controllers\ZambiaReportController::class, 'index'])
+            ->name('hr.zambia-reports.index');
+        Route::get('hr/zambia-reports/paye-p11', [\App\Http\Controllers\ZambiaReportController::class, 'payeP11'])
+            ->name('hr.zambia-reports.paye-p11');
+        Route::get('hr/zambia-reports/napsa-schedule', [\App\Http\Controllers\ZambiaReportController::class, 'napsaSchedule'])
+            ->name('hr.zambia-reports.napsa-schedule');
+        Route::get('hr/zambia-reports/nhima-report', [\App\Http\Controllers\ZambiaReportController::class, 'nhimaReport'])
+            ->name('hr.zambia-reports.nhima-report');
+        Route::get('hr/zambia-reports/bank-schedule', [\App\Http\Controllers\ZambiaReportController::class, 'bankSchedule'])
+            ->name('hr.zambia-reports.bank-schedule');
+        Route::get('hr/zambia-reports/payroll-summary', [\App\Http\Controllers\ZambiaReportController::class, 'payrollSummary'])
+            ->name('hr.zambia-reports.payroll-summary');
+        Route::get('hr/zambia-reports/payroll-detailed', [\App\Http\Controllers\ZambiaReportController::class, 'payrollDetailed'])
+            ->name('hr.zambia-reports.payroll-detailed');
+        Route::get('hr/zambia-reports/payroll-entries', [\App\Http\Controllers\ZambiaReportController::class, 'payrollEntries'])
+            ->name('hr.zambia-reports.payroll-entries');
+        Route::get('hr/zambia-reports/contributory-history', [\App\Http\Controllers\ZambiaReportController::class, 'contributoryHistory'])
+            ->name('hr.zambia-reports.contributory-history');
+        Route::get('hr/zambia-reports/deductions-report', [\App\Http\Controllers\ZambiaReportController::class, 'deductionsReport'])
+            ->name('hr.zambia-reports.deductions-report');
+        Route::get('hr/zambia-reports/variance-report', [\App\Http\Controllers\ZambiaReportController::class, 'varianceReport'])
+            ->name('hr.zambia-reports.variance-report');
+        Route::get('hr/zambia-reports/employee-list', [\App\Http\Controllers\ZambiaReportController::class, 'employeeList'])
+            ->name('hr.zambia-reports.employee-list');
+        Route::get('hr/zambia-reports/employee-status', [\App\Http\Controllers\ZambiaReportController::class, 'employeeStatus'])
+            ->name('hr.zambia-reports.employee-status');
+    });
+});

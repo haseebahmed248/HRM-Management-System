@@ -1,0 +1,75 @@
+---
+# cPanel Git Version Control deployment script for AfriPay HR.
+#
+# Triggered by the "Pull or Deploy" button in cPanel's Git Version Control
+# panel, or by adding this file to a tagged release. See:
+# https://docs.cpanel.net/cpanel/files/git-version-control/
+#
+# Assumptions:
+#   - cPanel home dir is /home/afripayhrco/ (matches the cPanel username).
+#   - Document root for afripay-hr.co.zm is /home/afripayhrco/public_html/
+#     and is pointed at Laravel's `public/` subfolder. (cPanel: Domains →
+#     Document Root.) If your hosting points the document root at the
+#     project root instead, change DEPLOYPATH to /home/afripayhrco/laravel/
+#     and adjust the Apache document root separately.
+#   - composer is available in PATH as `composer`. If not, replace with
+#     `/usr/local/bin/composer` or `php composer.phar`.
+#   - PHP 8.4+ is selected via MultiPHP Manager for the domain. The
+#     vendor packages will refuse to install on 8.2/8.3.
+#   - Vite assets in public/build/ are committed to the repo (built
+#     locally with `npm run build` — shared cPanel has no Node).
+#
+# What this script preserves between deploys:
+#   - .env (production secrets — never overwrite)
+#   - storage/ contents (uploads, logs, sessions, framework caches)
+#   - public/storage symlink (created once by `php artisan storage:link`)
+#
+# Idempotent. Safe to re-run after a failed deploy.
+
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/afripayhrco/public_html/
+
+    # ── 1. Sync source ────────────────────────────────────────────────────
+    # rsync mirrors the repo into the live tree, deleting any files that
+    # are no longer in the repo. The --exclude list keeps secrets and
+    # mutable state in place.
+    - /usr/bin/rsync -av --delete
+        --exclude='.env'
+        --exclude='.git'
+        --exclude='.github'
+        --exclude='.cpanel.yml'
+        --exclude='node_modules'
+        --exclude='storage/app'
+        --exclude='storage/framework/cache'
+        --exclude='storage/framework/sessions'
+        --exclude='storage/framework/views'
+        --exclude='storage/logs'
+        --exclude='public/storage'
+        --exclude='tests'
+        --exclude='*.md'
+        ./ $DEPLOYPATH
+
+    # ── 2. PHP dependencies ───────────────────────────────────────────────
+    # --no-dev drops dev packages (PHPUnit, factories, etc.) — saves ~80MB
+    # and keeps debug tooling out of production.
+    - cd $DEPLOYPATH && /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+    # ── 3. Database + caches ──────────────────────────────────────────────
+    # --force skips the "are you sure?" prompt that normally blocks
+    # migrations from running outside `local` env. Required for headless
+    # deploys.
+    - cd $DEPLOYPATH && /usr/bin/php artisan migrate --force
+    - cd $DEPLOYPATH && /usr/bin/php artisan config:cache
+    - cd $DEPLOYPATH && /usr/bin/php artisan route:cache
+    - cd $DEPLOYPATH && /usr/bin/php artisan view:cache
+
+    # ── 4. Storage symlink (idempotent — fails silently if already set) ──
+    - cd $DEPLOYPATH && /usr/bin/php artisan storage:link || true
+
+    # ── 5. Permissions ────────────────────────────────────────────────────
+    # Laravel needs write access to these two directories. cPanel users
+    # typically run as their own user, so 755 is enough — change to 775
+    # only if a separate group (e.g. apache/nobody) needs write access.
+    - /bin/chmod -R 755 $DEPLOYPATH/storage
+    - /bin/chmod -R 755 $DEPLOYPATH/bootstrap/cache

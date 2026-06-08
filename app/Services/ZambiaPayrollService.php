@@ -1,0 +1,183 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Setting;
+
+class ZambiaPayrollService
+{
+    protected array $settings;
+
+    public function __construct(int $creatorId)
+    {
+        $this->settings = Setting::where('user_id', $creatorId)
+            ->where('key', 'like', 'zambia_%')
+            ->pluck('value', 'key')
+            ->toArray();
+    }
+
+    // ─── 1. PAYE ────────────────────────────────────────────────────────────
+
+    /**
+     * track-a/10: PAYE now accepts an optional employee pension contribution.
+     * When supplied, the contribution is capped at `zambia_pension_relief_cap`
+     * (default K1,000/month) and SUBTRACTED from gross before the existing
+     * PAYE bands apply. This implements ZRA's pension tax-relief rule.
+     *
+     * Backward compatible: callers that omit the second argument compute
+     * exactly the same way as before this change.
+     */
+    public function calculatePAYE(float $grossSalary, float $pensionContribution = 0.0): float
+    {
+        // Apply pension relief BEFORE bands. Cap configurable per-tenant via
+        // the Zambia tax settings page; default K1,000/month.
+        $reliefCap = (float) ($this->settings['zambia_pension_relief_cap'] ?? 1000);
+        $relief    = max(0.0, min($pensionContribution, $reliefCap));
+        $taxableIncome = max(0.0, $grossSalary - $relief);
+
+        $slabs = [
+            [
+                'min'  => (float) ($this->settings['zambia_paye_slab_1_min'] ?? 0),
+                'max'  => (float) ($this->settings['zambia_paye_slab_1_max'] ?? 5100),
+                'rate' => (float) ($this->settings['zambia_paye_slab_1_rate'] ?? 0) / 100,
+            ],
+            [
+                'min'  => (float) ($this->settings['zambia_paye_slab_2_min'] ?? 5100.01),
+                'max'  => (float) ($this->settings['zambia_paye_slab_2_max'] ?? 7100),
+                'rate' => (float) ($this->settings['zambia_paye_slab_2_rate'] ?? 25) / 100,
+            ],
+            [
+                'min'  => (float) ($this->settings['zambia_paye_slab_3_min'] ?? 7100.01),
+                'max'  => (float) ($this->settings['zambia_paye_slab_3_max'] ?? 9200),
+                'rate' => (float) ($this->settings['zambia_paye_slab_3_rate'] ?? 30) / 100,
+            ],
+            [
+                'min'  => (float) ($this->settings['zambia_paye_slab_4_min'] ?? 9201.01),
+                'max'  => (float) ($this->settings['zambia_paye_slab_4_max'] ?? 999999999),
+                'rate' => (float) ($this->settings['zambia_paye_slab_4_rate'] ?? 35) / 100,
+            ],
+        ];
+
+        $tax = 0.0;
+
+        foreach ($slabs as $slab) {
+            if ($taxableIncome <= 0 || $taxableIncome < $slab['min']) {
+                continue;
+            }
+            $taxable = min($taxableIncome, $slab['max']) - ($slab['min'] - 1);
+            if ($taxable > 0) {
+                $tax += $taxable * $slab['rate'];
+            }
+        }
+
+        return round($tax, 2);
+    }
+
+    /**
+     * track-a/10: expose the configured relief cap so callers (Inertia pages,
+     * payroll breakdown, etc.) can display "K1,000 cap applied" or similar.
+     */
+    public function pensionReliefCap(): float
+    {
+        return (float) ($this->settings['zambia_pension_relief_cap'] ?? 1000);
+    }
+
+    // ─── 2. NAPSA ───────────────────────────────────────────────────────────
+
+    public function calculateNAPSA(float $grossSalary, bool $exempt = false): array
+    {
+        // If employee is exempt, return zero contributions
+        if ($exempt) {
+            return ['employee' => 0.0, 'employer' => 0.0];
+        }
+
+        $employeeRate = (float) ($this->settings['zambia_napsa_employee_rate'] ?? 5) / 100;
+        $employerRate = (float) ($this->settings['zambia_napsa_employer_rate'] ?? 5) / 100;
+        $cap          = (float) ($this->settings['zambia_napsa_monthly_cap']   ?? 1073.20);
+
+        $employeeContribution = min($grossSalary * $employeeRate, $cap);
+        $employerContribution = min($grossSalary * $employerRate, $cap);
+
+        return [
+            'employee' => round($employeeContribution, 2),
+            'employer' => round($employerContribution, 2),
+        ];
+    }
+
+    // ─── 3. NHIMA ───────────────────────────────────────────────────────────
+    // FIX: NHIMA must be calculated on BASIC SALARY only, not gross pay
+
+    public function calculateNHIMA(float $basicSalary, bool $exempt = false): array
+    {
+        // If employee is exempt, return zero contributions
+        if ($exempt) {
+            return ['employee' => 0.0, 'employer' => 0.0];
+        }
+
+        $employeeRate = (float) ($this->settings['zambia_nhima_employee_rate'] ?? 1) / 100;
+        $employerRate = (float) ($this->settings['zambia_nhima_employer_rate'] ?? 1) / 100;
+
+        return [
+            'employee' => round($basicSalary * $employeeRate, 2),
+            'employer' => round($basicSalary * $employerRate, 2),
+        ];
+    }
+
+    // ─── 4. SDL ─────────────────────────────────────────────────────────────
+
+    public function calculateSDL(float $totalPayroll, bool $exempt = false): float
+    {
+        if ($exempt) {
+            return 0.0;
+        }
+
+        $rate = (float) ($this->settings['zambia_sdl_rate'] ?? 0.5) / 100;
+
+        return round($totalPayroll * $rate, 2);
+    }
+
+    // ─── 5. Full payroll for one employee ───────────────────────────────────
+    // Now accepts basicSalary separately for NHIMA fix
+    // And exemption flags for NAPSA/NHIMA
+
+    public function calculateFullPayroll(
+        float $grossPay,
+        float $basicSalary = 0,
+        bool $exemptNapsa = false,
+        bool $exemptNhima = false,
+        float $pensionContribution = 0.0
+    ): array {
+        // track-a/10: forward pension contribution into PAYE so the existing
+        // cap-and-subtract logic applies. PAYE is the only statutory tax
+        // that gets the relief — NAPSA / NHIMA / SDL still use raw gross.
+        $paye  = $this->calculatePAYE($grossPay, $pensionContribution);
+        $napsa = $this->calculateNAPSA($grossPay, $exemptNapsa);
+
+        // ── NHIMA fix: use basicSalary, fallback to grossPay if not provided ──
+        $nhimaBase = $basicSalary > 0 ? $basicSalary : $grossPay;
+        $nhima     = $this->calculateNHIMA($nhimaBase, $exemptNhima);
+
+        $totalDeductions = $paye + $napsa['employee'] + $nhima['employee'];
+        $netPay          = $grossPay - $totalDeductions;
+
+        // track-a/10: compute the actual relief applied (capped) so the
+        // caller can show "K1,000 cap applied" in payslips / breakdowns.
+        $reliefCap        = $this->pensionReliefCap();
+        $pensionRelief    = max(0.0, min($pensionContribution, $reliefCap));
+
+        return [
+            'gross_pay'           => round($grossPay, 2),
+            'paye'                => $paye,
+            'napsa_employee'      => $napsa['employee'],
+            'nhima_employee'      => $nhima['employee'],
+            'total_deductions'    => round($totalDeductions, 2),
+            'net_pay'             => round($netPay, 2),
+            'napsa_employer'      => $napsa['employer'],
+            'nhima_employer'      => $nhima['employer'],
+            // track-a/10: surfaced for payslip transparency
+            'pension_contribution' => round($pensionContribution, 2),
+            'pension_relief'       => round($pensionRelief, 2),
+            'pension_relief_cap'   => round($reliefCap, 2),
+        ];
+    }
+}

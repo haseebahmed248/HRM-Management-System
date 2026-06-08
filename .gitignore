@@ -1,0 +1,62 @@
+/.phpunit.cache
+/bootstrap/ssr
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+/vendor
+.env.backup
+.env.production
+.phpactor.json
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+/auth.json
+/.fleet
+/.idea
+/.nova
+/.vscode
+/.zed
+.env
+/public/screenshots
+/config/verification.php
+node_modules
+
+# macOS artifacts — never need to be in the repo
+.DS_Store
+__MACOSX/
+**/__MACOSX/
+
+# Production-only files that should NOT be committed
+prod-logs/
+*.log
+auth.json
+
+# Secrets + dumps — anything that could leak credentials or PII
+.env.*backup*
+.env.*-creds
+.env.*.local
+# DB dumps (afripayhrco_Nafisa.sql etc.) — never commit
+*.sql
+*.sql.gz
+*.dump
+
+# cPanel-generated metadata
+.ftpquota
+
+# Internal planning + delivery docs — kept locally, NEVER pushed to the
+# client repo. These are the internal track-a strategy / audit trail,
+# not part of the codebase the client needs.
+EVALUATION-REPORT.md
+TRACK-A-PLAN.md
+TRACK-A-DELIVERY.md
+PHASE2_BACKLOG.md
+
+# AI assistant session metadata — local only
+.claude/
+
+# IMPORTANT: do NOT add `public/build/` here. Vite assets are built
+# locally with `npm run build` and committed, because shared cPanel
+# hosts do not have Node available to build on the server.
