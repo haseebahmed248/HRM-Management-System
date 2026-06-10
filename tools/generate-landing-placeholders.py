@@ -242,8 +242,15 @@ def main() -> None:
         out_dir = OUT / variant
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        hero_default(out_dir / "hero-default.png", headline=headline, subline=subline)
-        print(f"  wrote {out_dir / 'hero-default.png'}")
+        # The committed hero-default.png is the real designed tech graphic
+        # (1200x450) from the previous developer's upload, not a placeholder.
+        # Only regenerate if missing — never overwrite the committed asset.
+        hero_target = out_dir / "hero-default.png"
+        if not hero_target.exists():
+            hero_default(hero_target, headline=headline, subline=subline)
+            print(f"  wrote {hero_target}")
+        else:
+            print(f"  kept  {hero_target} (real asset, not regenerating)")
 
         for filename, title, blurb in SECTIONS:
             screenshot_card(out_dir / filename, title=title, blurb=blurb)
