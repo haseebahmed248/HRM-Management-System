@@ -145,6 +145,10 @@ return [
     | Boolean value
     |
     */
-    'updaterEnabled' => 'true',
+    // Hard-disabled in production. The rachidlaasri/laravel-installer updater
+    // wizard tries to run `artisan migrate` over HTTP, which silently fails on
+    // shared hosts without a PHP CLI binary (e.g. Infratel cPanel). On this
+    // deployment, migrations are applied manually via phpMyAdmin SQL.
+    'updaterEnabled' => 'false',
 
 ];

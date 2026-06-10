@@ -20,7 +20,11 @@ yarn-error.log
 /.vscode
 /.zed
 .env
-/public/screenshots
+# /public/screenshots — re-included for landing-page defaults (hero-default.png + screenshot cards).
+# The previous developer excluded this so user uploads wouldn't get committed, but the React
+# landing page hard-references defaults at /screenshots/saas/* and /screenshots/non-saas/*.
+# Without these files the hero panel and screenshots gallery 404. Track the defaults; ignore
+# user uploads via the more specific rule below if needed.
 /config/verification.php
 node_modules
 

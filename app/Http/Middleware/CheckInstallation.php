@@ -45,18 +45,13 @@ class CheckInstallation
             return redirect('/install');
         }
 
-        // If logged in as superadmin and migrations needed, redirect to /update
-        if (isSaas()) {
-            if (auth()->check() && auth()->user()->hasRole('superadmin') && $this->needsMigration()) {
-                return redirect('/update');
-            }
-        } else {
-            if (auth()->check() && auth()->user()->hasRole('company') && $this->needsMigration()) {
-                return redirect('/update');
-            }
-            
-        }
-
+        // Auto-redirect to /update on migration drift is intentionally disabled.
+        // On Infratel shared hosting there is no PHP CLI, so the updater wizard
+        // cannot run artisan migrate — it just 500s. Worse, a single orphaned
+        // row in the migrations table (e.g. a previous developer's migration
+        // file that's since been removed) is enough to lock every admin out of
+        // every page. Migrations on this deployment are applied via phpMyAdmin
+        // SQL by the dev team.
 
         return $next($request);
     }
