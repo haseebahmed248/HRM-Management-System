@@ -4,7 +4,7 @@
 /public/storage
 /storage/*.key
 /storage/pail
-/vendor
+# /vendor   — re-included for Infratel shared-hosting deploys (no CLI composer)
 .env.backup
 .env.production
 .phpactor.json
