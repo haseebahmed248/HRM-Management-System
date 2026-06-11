@@ -905,6 +905,9 @@ class PermissionSeeder extends Seeder
             ['name' => 'download-payslips', 'module' => 'payslips', 'label' => 'Download Payslips', 'description' => 'Can download payslips'],
             ['name' => 'send-payslips', 'module' => 'payslips', 'label' => 'Send Payslips', 'description' => 'Can send payslips via email'],
 
+            // Payroll Settings management (Financial Years, Tax Settings, etc.)
+            ['name' => 'manage-payroll-settings', 'module' => 'payroll_settings', 'label' => 'Manage Payroll Settings', 'description' => 'Can manage payroll settings like financial years and tax settings'],
+
             // Calendar permissions
             ['name' => 'manage-calendar', 'module' => 'calendar', 'label' => 'Manage Calendar', 'description' => 'Can manage calendar'],
             ['name' => 'view-calendar', 'module' => 'calendar', 'label' => 'View Calendar', 'description' => 'Can view calendar'],

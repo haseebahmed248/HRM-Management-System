@@ -132,8 +132,11 @@ class UserController extends BaseController
             $companySettings = settings();
             $userLang = isset($companySettings['defaultLanguage']) ? $companySettings['defaultLanguage'] : $authUser->lang;
             // Check plan limits for company users (only in SaaS mode)
+            // NOTE: Employees are NOT counted against the user limit — only staff/HR users count
             if (isSaas() && $authUser->type === 'company' && $authUser->plan) {
-                $currentUserCount = User::where('created_by', $authUser->id)->count();
+                $currentUserCount = User::whereIn('created_by', getCompanyAndUsersId())
+                    ->where('type', '!=', 'employee')
+                    ->count();
                 $maxUsers = $authUser->plan->max_users;
 
                 if ($currentUserCount >= $maxUsers) {
@@ -144,7 +147,9 @@ class UserController extends BaseController
             elseif (isSaas() && $authUser->type !== 'superadmin' && $authUser->created_by) {
                 $companyUser = User::find($authUser->created_by);
                 if ($companyUser && $companyUser->type === 'company' && $companyUser->plan) {
-                    $currentUserCount = User::where('created_by', $companyUser->id)->count();
+                    $currentUserCount = User::whereIn('created_by', getCompanyAndUsersId())
+                        ->where('type', '!=', 'employee')
+                        ->count();
                     $maxUsers = $companyUser->plan->max_users;
 
                     if ($currentUserCount >= $maxUsers) {

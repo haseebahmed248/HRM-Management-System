@@ -54,21 +54,10 @@ class ZambiaReportController extends Controller
         $run     = $this->getPayrollRun($request->payroll_run_id);
         $entries = $this->getFilteredEntries($request->payroll_run_id, $request);
         $format  = $request->input('format', 'csv');
+        $groupBy = $request->input('group_by');
 
-        $rows = $entries->map(fn($e) => [
-            $e->employee?->name ?? $e->employee_name ?? 'Unknown',
-            $e->employee?->employee?->tpin ?? 'N/A',
-            number_format($e->basic_salary, 2, '.', ''),
-            number_format($e->gross_pay, 2, '.', ''),
-            number_format($this->getDeductionAmount($e, 'zambia_paye'), 2, '.', ''),
-        ])->toArray();
-
-        $totals = [
-            'TOTALS', '',
-            number_format($entries->sum('basic_salary'), 2, '.', ''),
-            number_format($entries->sum('gross_pay'), 2, '.', ''),
-            number_format($entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_paye')), 2, '.', ''),
-        ];
+        $grouped = $this->groupEntries($entries, $groupBy);
+        $headers = ['Employee Name', 'TPIN', 'Basic Salary (ZMW)', 'Gross Pay (ZMW)', 'PAYE Deducted (ZMW)'];
 
         $sections = [
             ['type' => 'title', 'content' => 'PAYE P11 Report — ' . $run->pay_period_start->format('F Y')],
@@ -76,14 +65,53 @@ class ZambiaReportController extends Controller
                 ['Pay Period', $run->pay_period_start->format('d M Y') . ' – ' . $run->pay_period_end->format('d M Y')],
                 ['Pay Date', $run->pay_date->format('d M Y')],
                 ['Total Employees', $entries->count()],
+                ...($groupBy ? [['Grouped By', ucfirst($groupBy)]] : []),
             ]],
             ['type' => 'blank'],
-            ['type' => 'table',
-                'headers' => ['Employee Name', 'TPIN', 'Basic Salary (ZMW)', 'Gross Pay (ZMW)', 'PAYE Deducted (ZMW)'],
-                'rows'    => $rows,
-                'totals'  => $totals,
-            ],
         ];
+
+        // Build tables per group
+        foreach ($grouped as $groupName => $groupEntries) {
+            $rows = $groupEntries->map(fn($e) => [
+                $e->employee?->name ?? $e->employee_name ?? 'Unknown',
+                $e->employee?->employee?->tpin ?? 'N/A',
+                number_format($e->basic_salary, 2, '.', ''),
+                number_format($e->gross_pay, 2, '.', ''),
+                number_format($this->getDeductionAmount($e, 'zambia_paye'), 2, '.', ''),
+            ])->toArray();
+
+            $subtotals = [
+                $groupName ? 'Subtotal' : 'TOTALS', '',
+                number_format($groupEntries->sum('basic_salary'), 2, '.', ''),
+                number_format($groupEntries->sum('gross_pay'), 2, '.', ''),
+                number_format($groupEntries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_paye')), 2, '.', ''),
+            ];
+
+            $sections[] = [
+                'type'    => 'table',
+                'title'   => $groupName ?: null,
+                'headers' => $headers,
+                'rows'    => $rows,
+                'totals'  => $subtotals,
+            ];
+            if ($groupBy) $sections[] = ['type' => 'blank'];
+        }
+
+        // Grand totals if grouped
+        if ($groupBy && count($grouped) > 1) {
+            $sections[] = [
+                'type'    => 'table',
+                'title'   => 'GRAND TOTALS',
+                'headers' => null,
+                'rows'    => [],
+                'totals'  => [
+                    'ALL', '',
+                    number_format($entries->sum('basic_salary'), 2, '.', ''),
+                    number_format($entries->sum('gross_pay'), 2, '.', ''),
+                    number_format($entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_paye')), 2, '.', ''),
+                ],
+            ];
+        }
 
         return $this->exportSections($format, 'PAYE_P11_' . $run->pay_period_start->format('M_Y'), $sections);
     }
@@ -97,22 +125,10 @@ class ZambiaReportController extends Controller
         $run     = $this->getPayrollRun($request->payroll_run_id);
         $entries = $this->getFilteredEntries($request->payroll_run_id, $request);
         $format  = $request->input('format', 'csv');
+        $groupBy = $request->input('group_by');
 
-        $rows = $entries->map(function ($e) {
-            $empCont = $this->getDeductionAmount($e, 'zambia_napsa_employee');
-            $emrCont = $this->getEarningAmount($e, 'zambia_napsa_employer');
-            return [
-                $e->employee?->name ?? $e->employee_name ?? 'Unknown',
-                $e->employee?->employee?->napsa_number ?? 'N/A',
-                number_format($e->gross_pay, 2, '.', ''),
-                number_format($empCont, 2, '.', ''),
-                number_format($emrCont, 2, '.', ''),
-                number_format($empCont + $emrCont, 2, '.', ''),
-            ];
-        })->toArray();
-
-        $totalEmp = $entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_napsa_employee'));
-        $totalEmr = $entries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_napsa_employer'));
+        $grouped = $this->groupEntries($entries, $groupBy);
+        $headers = ['Employee Name', 'NAPSA Number', 'Gross Pay (ZMW)', 'Employee Contribution (ZMW)', 'Employer Contribution (ZMW)', 'Total (ZMW)'];
 
         $sections = [
             ['type' => 'title', 'content' => 'NAPSA Schedule — ' . $run->pay_period_start->format('F Y')],
@@ -120,14 +136,49 @@ class ZambiaReportController extends Controller
                 ['Pay Period', $run->pay_period_start->format('d M Y') . ' – ' . $run->pay_period_end->format('d M Y')],
                 ['Pay Date', $run->pay_date->format('d M Y')],
                 ['Total Employees', $entries->count()],
+                ...($groupBy ? [['Grouped By', ucfirst($groupBy)]] : []),
             ]],
             ['type' => 'blank'],
-            ['type' => 'table',
-                'headers' => ['Employee Name', 'NAPSA Number', 'Gross Pay (ZMW)', 'Employee Contribution (ZMW)', 'Employer Contribution (ZMW)', 'Total (ZMW)'],
-                'rows'    => $rows,
-                'totals'  => ['TOTALS', '', number_format($entries->sum('gross_pay'), 2, '.', ''), number_format($totalEmp, 2, '.', ''), number_format($totalEmr, 2, '.', ''), number_format($totalEmp + $totalEmr, 2, '.', '')],
-            ],
         ];
+
+        foreach ($grouped as $groupName => $groupEntries) {
+            $rows = $groupEntries->map(function ($e) {
+                $empCont = $this->getDeductionAmount($e, 'zambia_napsa_employee');
+                $emrCont = $this->getEarningAmount($e, 'zambia_napsa_employer');
+                return [
+                    $e->employee?->name ?? $e->employee_name ?? 'Unknown',
+                    $e->employee?->employee?->napsa_number ?? 'N/A',
+                    number_format($e->gross_pay, 2, '.', ''),
+                    number_format($empCont, 2, '.', ''),
+                    number_format($emrCont, 2, '.', ''),
+                    number_format($empCont + $emrCont, 2, '.', ''),
+                ];
+            })->toArray();
+
+            $grpEmp = $groupEntries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_napsa_employee'));
+            $grpEmr = $groupEntries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_napsa_employer'));
+
+            $sections[] = [
+                'type'    => 'table',
+                'title'   => $groupName ?: null,
+                'headers' => $headers,
+                'rows'    => $rows,
+                'totals'  => [$groupName ? 'Subtotal' : 'TOTALS', '', number_format($groupEntries->sum('gross_pay'), 2, '.', ''), number_format($grpEmp, 2, '.', ''), number_format($grpEmr, 2, '.', ''), number_format($grpEmp + $grpEmr, 2, '.', '')],
+            ];
+            if ($groupBy) $sections[] = ['type' => 'blank'];
+        }
+
+        if ($groupBy && count($grouped) > 1) {
+            $totalEmp = $entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_napsa_employee'));
+            $totalEmr = $entries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_napsa_employer'));
+            $sections[] = [
+                'type'    => 'table',
+                'title'   => 'GRAND TOTALS',
+                'headers' => null,
+                'rows'    => [],
+                'totals'  => ['ALL', '', number_format($entries->sum('gross_pay'), 2, '.', ''), number_format($totalEmp, 2, '.', ''), number_format($totalEmr, 2, '.', ''), number_format($totalEmp + $totalEmr, 2, '.', '')],
+            ];
+        }
 
         return $this->exportSections($format, 'NAPSA_Schedule_' . $run->pay_period_start->format('M_Y'), $sections);
     }
@@ -141,22 +192,10 @@ class ZambiaReportController extends Controller
         $run     = $this->getPayrollRun($request->payroll_run_id);
         $entries = $this->getFilteredEntries($request->payroll_run_id, $request);
         $format  = $request->input('format', 'csv');
+        $groupBy = $request->input('group_by');
 
-        $rows = $entries->map(function ($e) {
-            $empCont = $this->getDeductionAmount($e, 'zambia_nhima_employee');
-            $emrCont = $this->getEarningAmount($e, 'zambia_nhima_employer');
-            return [
-                $e->employee?->name ?? $e->employee_name ?? 'Unknown',
-                $e->employee?->employee?->nhima_number ?? 'N/A',
-                number_format($e->gross_pay, 2, '.', ''),
-                number_format($empCont, 2, '.', ''),
-                number_format($emrCont, 2, '.', ''),
-                number_format($empCont + $emrCont, 2, '.', ''),
-            ];
-        })->toArray();
-
-        $totalEmp = $entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_nhima_employee'));
-        $totalEmr = $entries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_nhima_employer'));
+        $grouped = $this->groupEntries($entries, $groupBy);
+        $headers = ['Employee Name', 'NHIMA Number', 'Gross Pay (ZMW)', 'Employee Contribution (ZMW)', 'Employer Contribution (ZMW)', 'Total (ZMW)'];
 
         $sections = [
             ['type' => 'title', 'content' => 'NHIMA Report — ' . $run->pay_period_start->format('F Y')],
@@ -164,14 +203,49 @@ class ZambiaReportController extends Controller
                 ['Pay Period', $run->pay_period_start->format('d M Y') . ' – ' . $run->pay_period_end->format('d M Y')],
                 ['Pay Date', $run->pay_date->format('d M Y')],
                 ['Total Employees', $entries->count()],
+                ...($groupBy ? [['Grouped By', ucfirst($groupBy)]] : []),
             ]],
             ['type' => 'blank'],
-            ['type' => 'table',
-                'headers' => ['Employee Name', 'NHIMA Number', 'Gross Pay (ZMW)', 'Employee Contribution (ZMW)', 'Employer Contribution (ZMW)', 'Total (ZMW)'],
-                'rows'    => $rows,
-                'totals'  => ['TOTALS', '', number_format($entries->sum('gross_pay'), 2, '.', ''), number_format($totalEmp, 2, '.', ''), number_format($totalEmr, 2, '.', ''), number_format($totalEmp + $totalEmr, 2, '.', '')],
-            ],
         ];
+
+        foreach ($grouped as $groupName => $groupEntries) {
+            $rows = $groupEntries->map(function ($e) {
+                $empCont = $this->getDeductionAmount($e, 'zambia_nhima_employee');
+                $emrCont = $this->getEarningAmount($e, 'zambia_nhima_employer');
+                return [
+                    $e->employee?->name ?? $e->employee_name ?? 'Unknown',
+                    $e->employee?->employee?->nhima_number ?? 'N/A',
+                    number_format($e->gross_pay, 2, '.', ''),
+                    number_format($empCont, 2, '.', ''),
+                    number_format($emrCont, 2, '.', ''),
+                    number_format($empCont + $emrCont, 2, '.', ''),
+                ];
+            })->toArray();
+
+            $grpEmp = $groupEntries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_nhima_employee'));
+            $grpEmr = $groupEntries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_nhima_employer'));
+
+            $sections[] = [
+                'type'    => 'table',
+                'title'   => $groupName ?: null,
+                'headers' => $headers,
+                'rows'    => $rows,
+                'totals'  => [$groupName ? 'Subtotal' : 'TOTALS', '', number_format($groupEntries->sum('gross_pay'), 2, '.', ''), number_format($grpEmp, 2, '.', ''), number_format($grpEmr, 2, '.', ''), number_format($grpEmp + $grpEmr, 2, '.', '')],
+            ];
+            if ($groupBy) $sections[] = ['type' => 'blank'];
+        }
+
+        if ($groupBy && count($grouped) > 1) {
+            $totalEmp = $entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_nhima_employee'));
+            $totalEmr = $entries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_nhima_employer'));
+            $sections[] = [
+                'type'    => 'table',
+                'title'   => 'GRAND TOTALS',
+                'headers' => null,
+                'rows'    => [],
+                'totals'  => ['ALL', '', number_format($entries->sum('gross_pay'), 2, '.', ''), number_format($totalEmp, 2, '.', ''), number_format($totalEmr, 2, '.', ''), number_format($totalEmp + $totalEmr, 2, '.', '')],
+            ];
+        }
 
         return $this->exportSections($format, 'NHIMA_Report_' . $run->pay_period_start->format('M_Y'), $sections);
     }
@@ -185,19 +259,10 @@ class ZambiaReportController extends Controller
         $run     = $this->getPayrollRun($request->payroll_run_id);
         $entries = $this->getFilteredEntries($request->payroll_run_id, $request);
         $format  = $request->input('format', 'csv');
+        $groupBy = $request->input('group_by');
 
-        $rows = $entries->map(function ($e) {
-            $emp  = $e->employee?->employee ?? null;
-            $name = $e->employee?->name ?? $e->employee_name ?? 'Unknown';
-            return [
-                $name,
-                $emp->bank_name ?? 'N/A',
-                $emp->account_holder_name ?? $name,
-                $emp->account_number ?? 'N/A',
-                $emp->bank_identifier_code ?? 'N/A',
-                number_format($e->net_pay, 2, '.', ''),
-            ];
-        })->toArray();
+        $grouped = $this->groupEntries($entries, $groupBy);
+        $headers = ['Employee Name', 'Bank Name', 'Account Holder', 'Account Number', 'BIC/SWIFT', 'Net Pay (ZMW)'];
 
         $sections = [
             ['type' => 'title', 'content' => 'Bank Payment Schedule — ' . $run->pay_period_start->format('F Y')],
@@ -205,14 +270,44 @@ class ZambiaReportController extends Controller
                 ['Pay Period', $run->pay_period_start->format('d M Y') . ' – ' . $run->pay_period_end->format('d M Y')],
                 ['Pay Date', $run->pay_date->format('d M Y')],
                 ['Total Employees', $entries->count()],
+                ...($groupBy ? [['Grouped By', ucfirst($groupBy)]] : []),
             ]],
             ['type' => 'blank'],
-            ['type' => 'table',
-                'headers' => ['Employee Name', 'Bank Name', 'Account Holder', 'Account Number', 'BIC/SWIFT', 'Net Pay (ZMW)'],
-                'rows'    => $rows,
-                'totals'  => ['TOTALS', '', '', '', '', number_format($entries->sum('net_pay'), 2, '.', '')],
-            ],
         ];
+
+        foreach ($grouped as $groupName => $groupEntries) {
+            $rows = $groupEntries->map(function ($e) {
+                $emp  = $e->employee?->employee ?? null;
+                $name = $e->employee?->name ?? $e->employee_name ?? 'Unknown';
+                return [
+                    $name,
+                    $emp->bank_name ?? 'N/A',
+                    $emp->account_holder_name ?? $name,
+                    $emp->account_number ?? 'N/A',
+                    $emp->bank_identifier_code ?? 'N/A',
+                    number_format($e->net_pay, 2, '.', ''),
+                ];
+            })->toArray();
+
+            $sections[] = [
+                'type'    => 'table',
+                'title'   => $groupName ?: null,
+                'headers' => $headers,
+                'rows'    => $rows,
+                'totals'  => [$groupName ? 'Subtotal' : 'TOTALS', '', '', '', '', number_format($groupEntries->sum('net_pay'), 2, '.', '')],
+            ];
+            if ($groupBy) $sections[] = ['type' => 'blank'];
+        }
+
+        if ($groupBy && count($grouped) > 1) {
+            $sections[] = [
+                'type'    => 'table',
+                'title'   => 'GRAND TOTALS',
+                'headers' => null,
+                'rows'    => [],
+                'totals'  => ['ALL', '', '', '', '', number_format($entries->sum('net_pay'), 2, '.', '')],
+            ];
+        }
 
         return $this->exportSections($format, 'Bank_Payment_Schedule_' . $run->pay_period_start->format('M_Y'), $sections);
     }
@@ -226,19 +321,26 @@ class ZambiaReportController extends Controller
         $run     = $this->getPayrollRun($request->payroll_run_id);
         $entries = $this->getFilteredEntries($request->payroll_run_id, $request);
         $format  = $request->input('format', 'csv');
-
-        $totalGross      = $entries->sum('gross_pay');
-        $totalPaye       = $entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_paye'));
-        $totalNapsaEmp   = $entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_napsa_employee'));
-        $totalNapsaEmr   = $entries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_napsa_employer'));
-        $totalNhimaEmp   = $entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_nhima_employee'));
-        $totalNhimaEmr   = $entries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_nhima_employer'));
-        $totalSdl        = $entries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_sdl'));
-        $totalDeductions = $entries->sum('total_deductions');
-        $totalNet        = $entries->sum('net_pay');
-        $totalEmpCost    = $totalNet + $totalNapsaEmr + $totalNhimaEmr + $totalSdl;
+        $groupBy = $request->input('group_by');
 
         $fmt = fn($v) => number_format($v, 2, '.', '');
+
+        // Helper to calculate summary totals for a collection of entries
+        $calcTotals = function ($entries) {
+            $gross      = $entries->sum('gross_pay');
+            $paye       = $entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_paye'));
+            $napsaEmp   = $entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_napsa_employee'));
+            $napsaEmr   = $entries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_napsa_employer'));
+            $nhimaEmp   = $entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_nhima_employee'));
+            $nhimaEmr   = $entries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_nhima_employer'));
+            $sdl        = $entries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_sdl'));
+            $deductions = $entries->sum('total_deductions');
+            $net        = $entries->sum('net_pay');
+            $empCost    = $net + $napsaEmr + $nhimaEmr + $sdl;
+            return compact('gross', 'paye', 'napsaEmp', 'napsaEmr', 'nhimaEmp', 'nhimaEmr', 'sdl', 'deductions', 'net', 'empCost');
+        };
+
+        $grouped = $this->groupEntries($entries, $groupBy);
 
         $sections = [
             ['type' => 'title', 'content' => 'Payroll Summary — ' . $run->pay_period_start->format('F Y')],
@@ -246,32 +348,55 @@ class ZambiaReportController extends Controller
                 ['Pay Period', $run->pay_period_start->format('d M Y') . ' – ' . $run->pay_period_end->format('d M Y')],
                 ['Pay Date', $run->pay_date->format('d M Y')],
                 ['Total Employees', $entries->count()],
+                ...($groupBy ? [['Grouped By', ucfirst($groupBy)]] : []),
             ]],
             ['type' => 'blank'],
-            ['type' => 'table',
-                'title'   => 'Payroll Totals',
-                'headers' => ['Description', 'Amount (ZMW)'],
-                'rows'    => [
-                    ['Total Gross Pay',         $fmt($totalGross)],
-                    ['Total PAYE Tax',           $fmt($totalPaye)],
-                    ['Total NAPSA (Employee)',   $fmt($totalNapsaEmp)],
-                    ['Total NHIMA (Employee)',   $fmt($totalNhimaEmp)],
-                    ['Total Deductions',         $fmt($totalDeductions)],
-                    ['Total Net Pay',            $fmt($totalNet)],
-                ],
-            ],
-            ['type' => 'blank'],
-            ['type' => 'table',
-                'title'   => 'Employer Contributions',
-                'headers' => ['Description', 'Amount (ZMW)'],
-                'rows'    => [
-                    ['Total NAPSA (Employer)',  $fmt($totalNapsaEmr)],
-                    ['Total NHIMA (Employer)',  $fmt($totalNhimaEmr)],
-                    ['Total SDL',               $fmt($totalSdl)],
-                    ['Total Employer Cost',     $fmt($totalEmpCost)],
-                ],
-            ],
         ];
+
+        foreach ($grouped as $groupName => $groupEntries) {
+            $t = $calcTotals($groupEntries);
+
+            $sections[] = [
+                'type'    => 'table',
+                'title'   => $groupName ? "{$groupName} — Payroll Totals" : 'Payroll Totals',
+                'headers' => ['Description', 'Amount (ZMW)'],
+                'rows'    => [
+                    ['Total Gross Pay',         $fmt($t['gross'])],
+                    ['Total PAYE Tax',           $fmt($t['paye'])],
+                    ['Total NAPSA (Employee)',   $fmt($t['napsaEmp'])],
+                    ['Total NHIMA (Employee)',   $fmt($t['nhimaEmp'])],
+                    ['Total Deductions',         $fmt($t['deductions'])],
+                    ['Total Net Pay',            $fmt($t['net'])],
+                ],
+            ];
+            $sections[] = [
+                'type'    => 'table',
+                'title'   => $groupName ? "{$groupName} — Employer Contributions" : 'Employer Contributions',
+                'headers' => ['Description', 'Amount (ZMW)'],
+                'rows'    => [
+                    ['Total NAPSA (Employer)',  $fmt($t['napsaEmr'])],
+                    ['Total NHIMA (Employer)',  $fmt($t['nhimaEmr'])],
+                    ['Total SDL',               $fmt($t['sdl'])],
+                    ['Total Employer Cost',     $fmt($t['empCost'])],
+                ],
+            ];
+            $sections[] = ['type' => 'blank'];
+        }
+
+        // Grand totals if grouped
+        if ($groupBy && count($grouped) > 1) {
+            $t = $calcTotals($entries);
+            $sections[] = [
+                'type'    => 'table',
+                'title'   => 'GRAND TOTALS — All Groups',
+                'headers' => ['Description', 'Amount (ZMW)'],
+                'rows'    => [
+                    ['Total Gross Pay',         $fmt($t['gross'])],
+                    ['Total Net Pay',            $fmt($t['net'])],
+                    ['Total Employer Cost',     $fmt($t['empCost'])],
+                ],
+            ];
+        }
 
         return $this->exportSections($format, 'Payroll_Summary_' . $run->pay_period_start->format('M_Y'), $sections);
     }
@@ -1198,7 +1323,7 @@ class ZambiaReportController extends Controller
     {
         $query = PayrollEntry::where('payroll_run_id', $payrollRunId)
             ->whereIn('created_by', getCompanyAndUsersId())
-            ->with('employee.employee');
+            ->with(['employee.employee.branch', 'employee.employee.department']);
 
         if ($branchId = $request->input('branch_id')) {
             $query->whereHas('employee.employee', fn($q) => $q->where('branch_id', $branchId));
@@ -1221,6 +1346,40 @@ class ZambiaReportController extends Controller
         }
 
         return $query->get();
+    }
+
+    /**
+     * Group entries by branch or department.
+     * Returns: ['Group Name' => Collection<PayrollEntry>, ...]
+     */
+    private function groupEntries($entries, ?string $groupBy): array
+    {
+        if (!$groupBy || !in_array($groupBy, ['branch', 'department'])) {
+            return ['' => $entries]; // No grouping — single group with empty key
+        }
+
+        $grouped = [];
+        foreach ($entries as $entry) {
+            $emp = $entry->employee?->employee;
+            if ($groupBy === 'branch') {
+                $groupName = $emp?->branch?->name ?? 'Unassigned';
+            } else {
+                $groupName = $emp?->department?->name ?? 'Unassigned';
+            }
+            if (!isset($grouped[$groupName])) {
+                $grouped[$groupName] = collect();
+            }
+            $grouped[$groupName]->push($entry);
+        }
+
+        // Sort groups alphabetically, but keep "Unassigned" at the end
+        uksort($grouped, function ($a, $b) {
+            if ($a === 'Unassigned') return 1;
+            if ($b === 'Unassigned') return -1;
+            return strcasecmp($a, $b);
+        });
+
+        return $grouped;
     }
 
     private function getDeductionAmount(PayrollEntry $entry, string $type): float

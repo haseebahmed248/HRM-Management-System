@@ -126,6 +126,24 @@ Route::post('settings/zambia-tax/update',
     [\App\Http\Controllers\Settings\ZambiaTaxSettingController::class, 'update']
 )->name('settings.zambia-tax.update');
 
+    // Financial Year Settings routes
+    Route::middleware('permission:manage-payroll-settings')->group(function () {
+        Route::get('hr/financial-years', [\App\Http\Controllers\FinancialYearController::class, 'index'])
+            ->name('hr.financial-years.index');
+        Route::post('hr/financial-years', [\App\Http\Controllers\FinancialYearController::class, 'store'])
+            ->name('hr.financial-years.store');
+        Route::put('hr/financial-years/{id}', [\App\Http\Controllers\FinancialYearController::class, 'update'])
+            ->name('hr.financial-years.update');
+        Route::delete('hr/financial-years/{id}', [\App\Http\Controllers\FinancialYearController::class, 'destroy'])
+            ->name('hr.financial-years.destroy');
+        Route::post('hr/financial-years/{id}/set-current', [\App\Http\Controllers\FinancialYearController::class, 'setCurrent'])
+            ->name('hr.financial-years.set-current');
+        Route::post('hr/financial-years/{id}/close', [\App\Http\Controllers\FinancialYearController::class, 'close'])
+            ->name('hr.financial-years.close');
+        Route::post('hr/financial-years/{id}/reopen', [\App\Http\Controllers\FinancialYearController::class, 'reopen'])
+            ->name('hr.financial-years.reopen');
+    });
+
     // Zambia Compliance Reports — uses manage-payroll-runs permission (HR already has this)
     Route::middleware('permission:manage-payroll-runs')->group(function () {
         Route::get('hr/zambia-reports', [\App\Http\Controllers\ZambiaReportController::class, 'index'])

@@ -63,9 +63,12 @@ class PayslipController extends Controller
             }
 
             // Handle date range filter
-            // If no dates passed in request → fallback to latest payroll run period
-            $dateFrom = !empty($request->date_from) ? $request->date_from : ($defaultPeriod['from'] ?? null);
-            $dateTo   = !empty($request->date_to)   ? $request->date_to   : ($defaultPeriod['to']   ?? null);
+            // When searching: don't apply default date filter (search across all periods)
+            // When not searching: fallback to latest payroll run period
+            $isSearching = $request->has('search') && !empty($request->search);
+
+            $dateFrom = !empty($request->date_from) ? $request->date_from : ($isSearching ? null : ($defaultPeriod['from'] ?? null));
+            $dateTo   = !empty($request->date_to)   ? $request->date_to   : ($isSearching ? null : ($defaultPeriod['to']   ?? null));
 
             if ($dateFrom) {
                 $query->where('pay_period_start', '>=', $dateFrom);

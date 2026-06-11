@@ -862,6 +862,13 @@ export function AppSidebar() {
             });
         }
 
+        if (hasPermission(permissions, 'manage-payroll-settings')) {
+            payrollChildren.push({
+                title: t('Financial Years'),
+                href: route('hr.financial-years.index')
+            });
+        }
+
         if (hasPermission(permissions, 'manage-payroll-runs')) {
             payrollChildren.push({
                 title: t('Zambia Reports'),

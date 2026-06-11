@@ -80,6 +80,7 @@ export default function ZambiaReports() {
     // ── Payroll run reports state ───────────────────────────────────────────
     const [selectedRun,      setSelectedRun]      = useState('');
     const [runFormat,        setRunFormat]         = useState<ExportFormat>('csv');
+    const [runGroupBy,       setRunGroupBy]        = useState('');  // '' | 'branch' | 'department'
     const [runBranch,        setRunBranch]         = useState('');
     const [runDept,          setRunDept]           = useState('');
     const [runDesig,         setRunDesig]          = useState('');
@@ -134,6 +135,7 @@ export default function ZambiaReports() {
         postDownload(routeKey, {
             payroll_run_id: selectedRun,
             format:         runFormat,
+            group_by:       runGroupBy,
             branch_id:      runBranch,
             department_id:  runDept,
             designation_id: runDesig,
@@ -399,12 +401,26 @@ export default function ZambiaReports() {
                                 </select>
                             </div>
 
-                            {/* Format + Filter toggle row */}
+                            {/* Format + Group By + Filter toggle row */}
                             <div className="flex flex-wrap items-center gap-4">
                                 <div className="space-y-1">
                                     <Label className="text-xs text-muted-foreground">{t('Export Format')}</Label>
                                     <FormatToggle value={runFormat} onChange={setRunFormat} />
                                 </div>
+                                {(branches.length > 0 || departments.length > 0) && (
+                                    <div className="space-y-1">
+                                        <Label className="text-xs text-muted-foreground">{t('Group By')}</Label>
+                                        <select
+                                            className="border border-input rounded-md px-2.5 py-1.5 text-sm bg-background min-w-[140px]"
+                                            value={runGroupBy}
+                                            onChange={e => setRunGroupBy(e.target.value)}
+                                        >
+                                            <option value="">{t('No Grouping')}</option>
+                                            {branches.length > 0 && <option value="branch">{t('Branch')}</option>}
+                                            {departments.length > 0 && <option value="department">{t('Department')}</option>}
+                                        </select>
+                                    </div>
+                                )}
                                 {(branches.length > 0 || departments.length > 0 || designations.length > 0) && (
                                     <div className="space-y-1">
                                         <Label className="text-xs text-muted-foreground">&nbsp;</Label>

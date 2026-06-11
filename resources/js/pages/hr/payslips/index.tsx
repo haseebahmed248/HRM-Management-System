@@ -98,29 +98,9 @@ export default function Payslips() {
   };
 
   const handleDownload = (payslip: any) => {
-    if (!globalSettings?.is_demo) toast.loading(t('Downloading payslip...'));
-
-    fetch(route('hr.payslips.download', payslip.id))
-      .then(response => {
-        if (!response.ok) {
-          return response.json().then(data => {
-            throw new Error(data.error || 'Failed to download payslip');
-          });
-        }
-        return response.text();
-      })
-      .then(html => {
-        if (!globalSettings?.is_demo) toast.dismiss();
-        const newWindow = window.open('', '_self');
-        if (newWindow) {
-          newWindow.document.write(html);
-          newWindow.document.close();
-        }
-      })
-      .catch(error => {
-        if (!globalSettings?.is_demo) toast.dismiss();
-        toast.error(t(error.message));
-      });
+    // Open payslip in new tab (same pattern as Reports)
+    window.open(route('hr.payslips.download', payslip.id), '_blank');
+    toast.success(t('Payslip download started'));
   };
 
   // Reset goes back to default period (latest payroll run)

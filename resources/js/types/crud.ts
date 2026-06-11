@@ -77,6 +77,9 @@ export interface FormField {
   multiple?: boolean; // For media-picker and multi-select fields
   searchable?: boolean; // For select fields
   options?: FilterOption[];
+  defaultValue?: any; // Default value for create mode
+  disabled?: boolean; // Whether the field is disabled
+  readOnly?: boolean; // Whether the field is read-only
   relation?: {
     endpoint: string;
     valueField: string;
