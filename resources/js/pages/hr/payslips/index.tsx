@@ -34,6 +34,8 @@ export default function Payslips() {
   const [dateFrom, setDateFrom]                 = useState(pageFilters.date_from || defaultPeriod?.from || '');
   const [dateTo, setDateTo]                     = useState(pageFilters.date_to   || defaultPeriod?.to   || '');
   const [showFilters, setShowFilters]           = useState(false);
+  // Track if user explicitly changed date filters (vs using defaults)
+  const [userSetDates, setUserSetDates]         = useState(!!(pageFilters.date_from || pageFilters.date_to));
 
   // ── NO useEffect for auto-apply — backend handles default period filtering ──
 
@@ -57,6 +59,8 @@ export default function Payslips() {
   };
 
   const applyFilters = () => {
+    // Only send dates if user explicitly set them via the date picker
+    // Otherwise let backend handle default period
     router.get(
       route('hr.payslips.index'),
       {
@@ -64,8 +68,8 @@ export default function Payslips() {
         search:      searchTerm || undefined,
         employee_id: selectedEmployee !== 'all' ? selectedEmployee : undefined,
         status:      selectedStatus !== 'all' ? selectedStatus : undefined,
-        date_from:   dateFrom || undefined,
-        date_to:     dateTo   || undefined,
+        date_from:   userSetDates ? (dateFrom || undefined) : undefined,
+        date_to:     userSetDates ? (dateTo || undefined) : undefined,
         per_page:    pageFilters.per_page,
       },
       { preserveState: true, preserveScroll: true }
@@ -85,8 +89,8 @@ export default function Payslips() {
         search:         searchTerm || undefined,
         employee_id:    selectedEmployee !== 'all' ? selectedEmployee : undefined,
         status:         selectedStatus !== 'all' ? selectedStatus : undefined,
-        date_from:      dateFrom || undefined,
-        date_to:        dateTo   || undefined,
+        date_from:      userSetDates ? (dateFrom || undefined) : undefined,
+        date_to:        userSetDates ? (dateTo || undefined) : undefined,
         per_page:       pageFilters.per_page,
       },
       { preserveState: true, preserveScroll: true }
@@ -111,6 +115,7 @@ export default function Payslips() {
     setDateFrom(defaultPeriod?.from || '');
     setDateTo(defaultPeriod?.to     || '');
     setShowFilters(false);
+    setUserSetDates(false);
 
     router.get(
       route('hr.payslips.index'),
@@ -121,6 +126,16 @@ export default function Payslips() {
       },
       { preserveState: true, preserveScroll: true }
     );
+  };
+
+  // Wrappers to track when user explicitly sets date filters
+  const handleDateFromChange = (val: any) => {
+    setDateFrom(val || '');
+    setUserSetDates(true);
+  };
+  const handleDateToChange = (val: any) => {
+    setDateTo(val || '');
+    setUserSetDates(true);
   };
 
   const breadcrumbs = [
@@ -265,14 +280,14 @@ export default function Payslips() {
               label:    t('Period From'),
               type:     'date',
               value:    dateFrom,
-              onChange: setDateFrom,
+              onChange: handleDateFromChange,
             },
             {
               name:     'date_to',
               label:    t('Period To'),
               type:     'date',
               value:    dateTo,
-              onChange: setDateTo,
+              onChange: handleDateToChange,
             },
           ]}
           showFilters={showFilters}

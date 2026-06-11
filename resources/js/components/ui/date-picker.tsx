@@ -8,11 +8,13 @@ import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 
 interface DatePickerProps {
-  selected?: Date
-  onSelect?: (date: Date | undefined) => void
-  onChange?: (date: Date | undefined) => void
+  selected?: Date | string
+  onSelect?: (date: Date | string | undefined) => void
+  onChange?: (date: Date | string | undefined) => void
   placeholder?: string
   disabled?: boolean
+  /** When true, returns YYYY-MM-DD string instead of Date object (avoids timezone issues) */
+  returnString?: boolean
 }
 
 export function DatePicker({
@@ -21,28 +23,34 @@ export function DatePicker({
   onChange,
   placeholder = "Pick a date",
   disabled = false,
+  returnString = true,
 }: DatePickerProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const [date, setDate] = React.useState<string>(selected ? format(selected, 'yyyy-MM-dd') : '');
-  
+
+  // Convert selected to string for the input
+  const getDateString = (val: Date | string | undefined): string => {
+    if (!val) return '';
+    if (typeof val === 'string') return val.slice(0, 10); // Handle ISO strings
+    return format(val, 'yyyy-MM-dd');
+  };
+
+  const [date, setDate] = React.useState<string>(getDateString(selected));
+
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setDate(e.target.value);
     if (e.target.value) {
-      const newDate = new Date(e.target.value);
-      if (onSelect) onSelect(newDate);
-      if (onChange) onChange(newDate);
+      // Return string to avoid timezone conversion issues
+      const result = returnString ? e.target.value : new Date(e.target.value + 'T00:00:00');
+      if (onSelect) onSelect(result);
+      if (onChange) onChange(result);
     } else {
       if (onSelect) onSelect(undefined);
       if (onChange) onChange(undefined);
     }
   };
-  
+
   React.useEffect(() => {
-    if (selected) {
-      setDate(format(selected, 'yyyy-MM-dd'));
-    } else {
-      setDate('');
-    }
+    setDate(getDateString(selected));
   }, [selected]);
 
   const openPicker = () => {
