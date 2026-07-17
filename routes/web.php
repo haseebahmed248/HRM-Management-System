@@ -1046,8 +1046,9 @@ Route::middleware(['auth', 'verified', 'setting'])->group(function () {
             Route::put('hr/leave-policies/{leavePolicy}/toggle-status', [LeavePolicyController::class, 'toggleStatus'])->middleware('permission:edit-leave-policies')->name('hr.leave-policies.toggle-status');
         });
 
-        // Leave Applications routes
-        Route::middleware('permission:manage-leave-applications')->group(function () {
+        // Leave Applications routes — employees (ESS) hold manage-own-leave-applications,
+        // so allow that too; the controller/actions still scope to the user's own records.
+        Route::middleware('permission:manage-leave-applications|manage-own-leave-applications')->group(function () {
             Route::get('hr/leave-applications', [LeaveApplicationController::class, 'index'])->name('hr.leave-applications.index');
             Route::get('hr/leave-applications/export', [LeaveApplicationController::class, 'export'])->name('hr.leave-applications.export');
             Route::post('hr/leave-applications', [LeaveApplicationController::class, 'store'])->middleware('permission:create-leave-applications')->name('hr.leave-applications.store');

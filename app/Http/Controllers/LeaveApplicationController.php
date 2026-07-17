@@ -16,7 +16,9 @@ class LeaveApplicationController extends Controller
 {
     public function index(Request $request)
     {
-        if (Auth::user()->can('manage-leave-applications')) {
+        // Employees (ESS) have manage-own-leave-applications but not the broad
+        // manage-leave-applications — let them in; the query below scopes to own.
+        if (Auth::user()->can('manage-leave-applications') || Auth::user()->can('manage-own-leave-applications')) {
             $query = LeaveApplication::with(['employee', 'leaveType', 'leavePolicy', 'approver', 'creator'])
                 ->where(function ($q) {
                     if (Auth::user()->can('manage-any-leave-applications')) {
