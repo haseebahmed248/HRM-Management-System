@@ -1440,6 +1440,20 @@ if (! function_exists('getCompanyId')) {
     }
 }
 
+// Resolve the platform Super Admin's user id. Used for globally-controlled
+// settings (e.g. Zambia tax settings) that the Super Admin manages for all tenants.
+if (! function_exists('getSuperAdminId')) {
+    function getSuperAdminId()
+    {
+        static $cached = null;
+        if ($cached !== null) {
+            return $cached ?: null;
+        }
+        $cached = \App\Models\User::where('type', 'superadmin')->value('id') ?? 0;
+        return $cached ?: null;
+    }
+}
+
 // Set Email Configurations
 if (! function_exists('setEmailConfigurations')) {
 

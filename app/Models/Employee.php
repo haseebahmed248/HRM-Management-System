@@ -20,6 +20,7 @@ class Employee extends Model
     'branch_id',
     'department_id',
     'designation_id',
+    'staff_tier_id',
     'shift_id',
     'attendance_policy_id',
     'date_of_joining',
@@ -50,6 +51,7 @@ class Employee extends Model
     'exempt_from_napsa',
     'exempt_from_nhima',
     'exempt_from_sdl',
+    'exempt_from_paye',
     'title',
     'first_name',
     'middle_name',
@@ -175,17 +177,46 @@ protected $casts = [
     }
 
     /**
-     * Generate unique employee ID
+     * Generate a unique employee ID for the current company.
+     *
+     * The prefix and zero-padding are configurable per company via the
+     * 'employee_id_prefix' / 'employee_id_padding' settings, so each tenant can
+     * use its own format (e.g. "BIL0001") instead of a shared generic "EMP000001"
+     * that collides across companies. The sequence is scoped to the whole company
+     * (not the individual sub-user creating the record), and the result is checked
+     * against the global unique index to guarantee it is free.
      */
     public static function generateEmployeeId()
     {
-        $creatorId = creatorId();
-        $last = self::where('created_by', $creatorId)
-            ->orderBy('id', 'desc')
-            ->value('employee_id');
+        $prefix  = trim((string) getSetting('employee_id_prefix', 'EMP'));
+        $padding = (int) getSetting('employee_id_padding', 6);
+        if ($padding < 1) {
+            $padding = 6;
+        }
 
-        $nextId = $last ? ((int) substr($last, 3)) + 1 : 1;
+        $companyUserIds = getCompanyAndUsersId();
 
-        return 'EMP' . str_pad($nextId, 6, '0', STR_PAD_LEFT);
+        // Highest existing sequence for this company under the current prefix.
+        $existing = self::whereIn('created_by', $companyUserIds)
+            ->where('employee_id', 'like', $prefix . '%')
+            ->pluck('employee_id');
+
+        $max = 0;
+        foreach ($existing as $eid) {
+            $num = (int) substr((string) $eid, strlen($prefix));
+            if ($num > $max) {
+                $max = $num;
+            }
+        }
+        $nextId = $max + 1;
+
+        // Guarantee global uniqueness (employee_id has a global unique index).
+        do {
+            $candidate = $prefix . str_pad((string) $nextId, $padding, '0', STR_PAD_LEFT);
+            $exists = self::where('employee_id', $candidate)->exists();
+            $nextId++;
+        } while ($exists);
+
+        return $candidate;
     }
 }

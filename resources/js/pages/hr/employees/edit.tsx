@@ -40,7 +40,7 @@ const RELATIONSHIP_OPTIONS = [
 
 export default function EmployeeEdit() {
     const { t } = useTranslation();
-    const { employee, branches, departments, designations, documentTypes, shifts, attendancePolicies } = usePage().props as any;
+    const { employee, branches, departments, designations, staffTiers, documentTypes, shifts, attendancePolicies } = usePage().props as any;
 
     const existingRelationship = employee.employee?.emergency_contact_relationship || '';
     const isOtherRelationship = existingRelationship !== '' && !RELATIONSHIP_OPTIONS.includes(existingRelationship);
@@ -69,6 +69,7 @@ export default function EmployeeEdit() {
         branch_id:            employee.employee?.branch_id ? employee.employee.branch_id.toString() : '',
         department_id:        employee.employee?.department_id ? employee.employee.department_id.toString() : '',
         designation_id:       employee.employee?.designation_id ? employee.employee.designation_id.toString() : '',
+        staff_tier_id:        employee.employee?.staff_tier_id ? employee.employee.staff_tier_id.toString() : '',
         shift_id:             employee.employee?.shift_id ? employee.employee.shift_id.toString() : '',
         attendance_policy_id: employee.employee?.attendance_policy_id ? employee.employee.attendance_policy_id.toString() : '',
         date_of_joining:      employee.employee?.date_of_joining || '',
@@ -103,6 +104,7 @@ export default function EmployeeEdit() {
         exempt_from_napsa: employee.employee?.exempt_from_napsa ?? false,
         exempt_from_nhima: employee.employee?.exempt_from_nhima ?? false,
         exempt_from_sdl:   employee.employee?.exempt_from_sdl ?? false,
+        exempt_from_paye:  employee.employee?.exempt_from_paye ?? false,
 
         documents: [],
     });
@@ -653,13 +655,13 @@ export default function EmployeeEdit() {
                                 {errors.employee_status && <p className="text-xs text-red-500">{errors.employee_status}</p>}
                             </div>
 
-                            {/* Staff Tier — track-a/11 */}
+                            {/* Payroll Tier (senior/junior) — track-a/11 */}
                             <div className="space-y-2">
-                                <Label htmlFor="staff_tier">{t('Staff Tier')}</Label>
+                                <Label htmlFor="staff_tier">{t('Payroll Tier')}</Label>
                                 <Select value={formData.staff_tier}
                                     onValueChange={(value) => handleChange('staff_tier', value)}>
                                     <SelectTrigger className={errors.staff_tier ? 'border-red-500' : ''}>
-                                        <SelectValue placeholder={t('Select Staff Tier')} />
+                                        <SelectValue placeholder={t('Select Payroll Tier')} />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="senior">{t('Senior')}</SelectItem>
@@ -668,6 +670,25 @@ export default function EmployeeEdit() {
                                 </Select>
                                 <p className="text-xs text-muted-foreground">{t('Used to scope payroll access to senior- or junior-only payroll officers.')}</p>
                                 {errors.staff_tier && <p className="text-xs text-red-500">{errors.staff_tier}</p>}
+                            </div>
+
+                            {/* Staff Tier — company-defined managed tier */}
+                            <div className="space-y-2">
+                                <Label htmlFor="staff_tier_id">{t('Staff Tier')}</Label>
+                                <Select value={formData.staff_tier_id}
+                                    onValueChange={(value) => handleChange('staff_tier_id', value)}>
+                                    <SelectTrigger className={errors.staff_tier_id ? 'border-red-500' : ''}>
+                                        <SelectValue placeholder={t('Select Staff Tier')} />
+                                    </SelectTrigger>
+                                    <SelectContent searchable={true}>
+                                        {(staffTiers || []).map((tier: any) => (
+                                            <SelectItem key={tier.id} value={tier.id.toString()}>
+                                                {tier.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {errors.staff_tier_id && <p className="text-xs text-red-500">{errors.staff_tier_id}</p>}
                             </div>
 
                             {/* Shift */}
@@ -930,7 +951,22 @@ export default function EmployeeEdit() {
                         <p className="text-muted-foreground mb-4 text-sm">
                             {t('Check the boxes below if this employee is exempt from specific statutory contributions. Exemptions apply to employees who have reached retirement age or based on specific contract terms.')}
                         </p>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div className="bg-muted/20 flex items-start space-x-3 rounded-md border p-4">
+                                <input type="checkbox" id="exempt_from_paye"
+                                    checked={formData.exempt_from_paye}
+                                    onChange={(e) => handleChange('exempt_from_paye', e.target.checked)}
+                                    className="mt-1 h-4 w-4 cursor-pointer rounded border-gray-300" />
+                                <div>
+                                    <Label htmlFor="exempt_from_paye" className="cursor-pointer font-medium">
+                                        {t('Exempt from PAYE')}
+                                    </Label>
+                                    <p className="text-muted-foreground mt-1 text-xs">
+                                        {t('Pay As You Earn — income tax (PAYE) will not be deducted for this employee.')}
+                                    </p>
+                                </div>
+                            </div>
+
                             <div className="bg-muted/20 flex items-start space-x-3 rounded-md border p-4">
                                 <input type="checkbox" id="exempt_from_napsa"
                                     checked={formData.exempt_from_napsa}

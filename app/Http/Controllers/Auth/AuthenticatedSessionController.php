@@ -5,13 +5,24 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\LoginHistory;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+
+/**
+ * Session key holding the candidate user-row ids after a login where the same
+ * email/password is valid for more than one company. The company picker reads it.
+ */
+const LOGIN_COMPANY_CANDIDATES = 'login.company_candidates';
+const LOGIN_REMEMBER           = 'login.remember';
 
 class AuthenticatedSessionController extends Controller
 {
@@ -40,9 +51,120 @@ class AuthenticatedSessionController extends Controller
     public function store(LoginRequest $request): RedirectResponse
     {
         try {
-            $request->authenticate();
+            $request->ensureIsNotRateLimited();
+
+            // A person may exist as several user rows (one per company) sharing the
+            // same email. Collect every active row whose password matches so we can
+            // let them choose which company to enter.
+            $candidates = User::where('email', $request->email)->get()
+                ->filter(fn ($u) => Hash::check($request->password, $u->password))
+                ->values();
+
+            if ($candidates->isEmpty()) {
+                RateLimiter::hit($request->throttleKey());
+                throw ValidationException::withMessages(['email' => __('auth.failed')]);
+            }
+
+            $active = $candidates->filter(fn ($u) => $u->status !== 'inactive')->values();
+            if ($active->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'email' => __('Your account is inactive. Please contact administrator.'),
+                ]);
+            }
+
+            RateLimiter::clear($request->throttleKey());
+
+            // More than one company → show the company picker (no login yet).
+            if ($active->count() > 1) {
+                $request->session()->put(LOGIN_COMPANY_CANDIDATES, $active->pluck('id')->all());
+                $request->session()->put(LOGIN_REMEMBER, $request->boolean('remember'));
+                return redirect()->route('login.company-select');
+            }
+
+            Auth::login($active->first(), $request->boolean('remember'));
             $request->session()->regenerate();
 
+            return $this->completeLogin($request);
+
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            Log::error('Login error: ' . $e->getMessage());
+            return back()->withErrors(['email' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Show the company chooser after a multi-company login match.
+     */
+    public function showCompanySelect(Request $request): Response|RedirectResponse
+    {
+        $ids = $request->session()->get(LOGIN_COMPANY_CANDIDATES, []);
+        if (empty($ids)) {
+            return redirect()->route('login');
+        }
+
+        $companies = User::whereIn('id', $ids)->get()->map(function ($u) {
+            $companyId = getCompanyId($u->id) ?? $u->id;
+            $company   = User::find($companyId);
+            return [
+                'user_id'      => $u->id,
+                'company_name' => $company?->name ?? __('Company'),
+                'role'         => ucfirst($u->type),
+            ];
+        })->values();
+
+        return Inertia::render('auth/company-select', [
+            'companies' => $companies,
+            'settings'  => settings(),
+        ]);
+    }
+
+    /**
+     * Complete login as the chosen company user row.
+     */
+    public function storeCompanySelect(Request $request): RedirectResponse
+    {
+        $ids = $request->session()->get(LOGIN_COMPANY_CANDIDATES, []);
+        if (empty($ids)) {
+            return redirect()->route('login');
+        }
+
+        $validated = $request->validate([
+            'user_id' => 'required|integer',
+        ]);
+
+        // The chosen row MUST be one of the verified candidates from this session.
+        if (!in_array((int) $validated['user_id'], array_map('intval', $ids), true)) {
+            throw ValidationException::withMessages([
+                'user_id' => __('Invalid company selection.'),
+            ]);
+        }
+
+        $user = User::find($validated['user_id']);
+        if (!$user || $user->status === 'inactive') {
+            throw ValidationException::withMessages([
+                'user_id' => __('This account is not available.'),
+            ]);
+        }
+
+        $remember = (bool) $request->session()->pull(LOGIN_REMEMBER, false);
+        $request->session()->forget(LOGIN_COMPANY_CANDIDATES);
+
+        Auth::login($user, $remember);
+        $request->session()->regenerate();
+
+        return $this->completeLogin($request);
+    }
+
+    /**
+     * Post-login bookkeeping (email-verification gate + login history) shared by
+     * the direct and company-picker login paths. Assumes the user is already
+     * authenticated and the session regenerated.
+     */
+    private function completeLogin(Request $request): RedirectResponse
+    {
+        try {
             // Check if email verification is enabled and user is not verified
             $emailVerificationEnabled = getSetting('emailVerification', false);
             if ($emailVerificationEnabled && !$request->user()->hasVerifiedEmail()) {

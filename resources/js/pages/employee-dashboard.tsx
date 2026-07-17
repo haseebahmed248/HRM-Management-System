@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { PageTemplate } from '@/components/page-template';
-import { RefreshCw, Bell, Users, Calendar } from 'lucide-react';
+import { RefreshCw, Bell, Users, Calendar, CalendarPlus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useTranslation } from 'react-i18next';
 import { usePage, router } from '@inertiajs/react';
@@ -143,14 +144,21 @@ export default function EmployeeDashboard({ dashboardData }: { dashboardData: Em
     });
   };
 
-  const pageActions: PageAction[] = [
-    {
-      label: t('Refresh'),
-      icon: <RefreshCw className="h-4 w-4" />,
-      variant: 'outline',
-      onClick: () => window.location.reload()
-    }
-  ];
+  const pageActions: PageAction[] = [];
+  if (hasPermission(permissions, 'create-leave-applications')) {
+    pageActions.push({
+      label: t('Apply for Leave'),
+      icon: <CalendarPlus className="h-4 w-4" />,
+      variant: 'default',
+      onClick: () => { window.location.href = route('hr.leave-applications.index'); }
+    });
+  }
+  pageActions.push({
+    label: t('Refresh'),
+    icon: <RefreshCw className="h-4 w-4" />,
+    variant: 'outline',
+    onClick: () => window.location.reload()
+  });
 
   const stats = dashboardData?.stats || {
     totalAwards: 0,
@@ -192,10 +200,22 @@ export default function EmployeeDashboard({ dashboardData }: { dashboardData: Em
         {/* Leave Balance Section */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-              <Calendar className="h-5 w-5" />
-              {t('Leave Balance')} — {new Date().getFullYear()}
-            </CardTitle>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                <Calendar className="h-5 w-5" />
+                {t('Leave Balance')} — {new Date().getFullYear()}
+              </CardTitle>
+              {hasPermission(permissions, 'create-leave-applications') && (
+                <Button
+                  size="sm"
+                  onClick={() => { window.location.href = route('hr.leave-applications.index'); }}
+                  className="gap-2"
+                >
+                  <CalendarPlus className="h-4 w-4" />
+                  {t('Apply for Leave')}
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {dashboardData?.leaveBalances?.length > 0 ? (

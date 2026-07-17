@@ -40,9 +40,12 @@ const RELATIONSHIP_OPTIONS = [
 
 export default function EmployeeCreate() {
     const { t } = useTranslation();
-    const { branches, departments, designations, documentTypes, shifts, attendancePolicies, generatedEmployeeId } = usePage().props as any;
+    const { branches, departments, designations, staffTiers, documentTypes, shifts, attendancePolicies, generatedEmployeeId } = usePage().props as any;
 
     const [formData, setFormData] = useState<Record<string, any>>({
+        // Pre-filled with the per-company generated suggestion; editable so the
+        // user can enter a free-format / manual ID instead.
+        employee_id: generatedEmployeeId ?? '',
         name: '',
         title: '',
         first_name: '',
@@ -60,6 +63,7 @@ export default function EmployeeCreate() {
         branch_id: '',
         department_id: '',
         designation_id: '',
+        staff_tier_id: '',
         shift_id: '',
         attendance_policy_id: '',
         date_of_joining: '',
@@ -90,6 +94,7 @@ export default function EmployeeCreate() {
         exempt_from_napsa: false,
         exempt_from_nhima: false,
         exempt_from_sdl: false,
+        exempt_from_paye: false,
         documents: [],
         passport_no: '',
         permit_no: '',
@@ -483,8 +488,14 @@ export default function EmployeeCreate() {
                             {/* Employee ID */}
                             <div className="space-y-2">
                                 <Label htmlFor="employee_id">{t('Employee ID')}</Label>
-                                <Input id="employee_id" value={generatedEmployeeId} readOnly className="bg-muted" />
-                                <p className="text-muted-foreground text-sm">{t('Employee ID will be auto-generated')}</p>
+                                <Input
+                                    id="employee_id"
+                                    value={formData.employee_id}
+                                    onChange={(e) => handleChange('employee_id', e.target.value)}
+                                    placeholder={generatedEmployeeId}
+                                />
+                                {errors.employee_id && <p className="text-destructive text-sm">{errors.employee_id}</p>}
+                                <p className="text-muted-foreground text-sm">{t('Auto-filled with the next ID — edit it to use your own format.')}</p>
                             </div>
 
                             {/* Profile Image */}
@@ -631,13 +642,13 @@ export default function EmployeeCreate() {
                                 {errors.employee_status && <p className="text-xs text-red-500">{errors.employee_status}</p>}
                             </div>
 
-                            {/* Staff Tier — track-a/11 */}
+                            {/* Payroll Tier (senior/junior) — track-a/11 */}
                             <div className="space-y-2">
-                                <Label htmlFor="staff_tier">{t('Staff Tier')}</Label>
+                                <Label htmlFor="staff_tier">{t('Payroll Tier')}</Label>
                                 <Select value={formData.staff_tier}
                                     onValueChange={(value) => handleChange('staff_tier', value)}>
                                     <SelectTrigger className={errors.staff_tier ? 'border-red-500' : ''}>
-                                        <SelectValue placeholder={t('Select Staff Tier')} />
+                                        <SelectValue placeholder={t('Select Payroll Tier')} />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="senior">{t('Senior')}</SelectItem>
@@ -646,6 +657,25 @@ export default function EmployeeCreate() {
                                 </Select>
                                 <p className="text-xs text-muted-foreground">{t('Used to scope payroll access to senior- or junior-only payroll officers.')}</p>
                                 {errors.staff_tier && <p className="text-xs text-red-500">{errors.staff_tier}</p>}
+                            </div>
+
+                            {/* Staff Tier — company-defined managed tier */}
+                            <div className="space-y-2">
+                                <Label htmlFor="staff_tier_id">{t('Staff Tier')}</Label>
+                                <Select value={formData.staff_tier_id}
+                                    onValueChange={(value) => handleChange('staff_tier_id', value)}>
+                                    <SelectTrigger className={errors.staff_tier_id ? 'border-red-500' : ''}>
+                                        <SelectValue placeholder={t('Select Staff Tier')} />
+                                    </SelectTrigger>
+                                    <SelectContent searchable={true}>
+                                        {(staffTiers || []).map((tier: any) => (
+                                            <SelectItem key={tier.id} value={tier.id.toString()}>
+                                                {tier.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {errors.staff_tier_id && <p className="text-xs text-red-500">{errors.staff_tier_id}</p>}
                             </div>
 
                             {/* Shift */}
@@ -908,7 +938,22 @@ export default function EmployeeCreate() {
                         <p className="text-muted-foreground mb-4 text-sm">
                             {t('Check the boxes below if this employee is exempt from specific statutory contributions. Exemptions apply to employees who have reached retirement age or based on specific contract terms.')}
                         </p>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div className="bg-muted/20 flex items-start space-x-3 rounded-md border p-4">
+                                <input type="checkbox" id="exempt_from_paye"
+                                    checked={formData.exempt_from_paye}
+                                    onChange={(e) => handleChange('exempt_from_paye', e.target.checked)}
+                                    className="mt-1 h-4 w-4 cursor-pointer rounded border-gray-300" />
+                                <div>
+                                    <Label htmlFor="exempt_from_paye" className="cursor-pointer font-medium">
+                                        {t('Exempt from PAYE')}
+                                    </Label>
+                                    <p className="text-muted-foreground mt-1 text-xs">
+                                        {t('Pay As You Earn — income tax (PAYE) will not be deducted for this employee.')}
+                                    </p>
+                                </div>
+                            </div>
+
                             <div className="bg-muted/20 flex items-start space-x-3 rounded-md border p-4">
                                 <input type="checkbox" id="exempt_from_napsa"
                                     checked={formData.exempt_from_napsa}

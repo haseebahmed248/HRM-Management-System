@@ -43,6 +43,7 @@ export interface BrandSettings {
   titleText: string;
   footerText: string;
   companyMobile?: string;
+  companyEmail?: string;
   companyAddress?: string;
   themeColor: ThemeColor;
   customColor: string;
@@ -60,6 +61,7 @@ export const DEFAULT_BRAND_SETTINGS: BrandSettings = {
   titleText: 'AfriPay HR',
   footerText: '© 2026 AfriPay HR. A product of Aromerc & Co. Ltd',
   companyMobile: '',
+  companyEmail: '',
   companyAddress: '',
   themeColor: 'green',
   customColor: '#3b82f6',
@@ -92,6 +94,7 @@ export const getBrandSettings = (userSettings?: Record<string, string>, globalSe
         titleText: parsedBrand.titleText || userSettings?.titleText || DEFAULT_BRAND_SETTINGS.titleText,
         footerText: parsedBrand.footerText || userSettings?.footerText || DEFAULT_BRAND_SETTINGS.footerText,
         companyMobile: parsedBrand.companyMobile || userSettings?.companyMobile || DEFAULT_BRAND_SETTINGS.companyMobile,
+        companyEmail: parsedBrand.companyEmail || userSettings?.companyEmail || DEFAULT_BRAND_SETTINGS.companyEmail,
         companyAddress: parsedBrand.companyAddress || userSettings?.companyAddress || DEFAULT_BRAND_SETTINGS.companyAddress,
         themeColor: parsedTheme.themeColor || DEFAULT_BRAND_SETTINGS.themeColor,
         customColor: parsedTheme.customColor || DEFAULT_BRAND_SETTINGS.customColor,
@@ -114,6 +117,7 @@ export const getBrandSettings = (userSettings?: Record<string, string>, globalSe
       titleText: userSettings.titleText || DEFAULT_BRAND_SETTINGS.titleText,
       footerText: userSettings.footerText || DEFAULT_BRAND_SETTINGS.footerText,
       companyMobile: userSettings.companyMobile || DEFAULT_BRAND_SETTINGS.companyMobile,
+      companyEmail: userSettings.companyEmail || DEFAULT_BRAND_SETTINGS.companyEmail,
       companyAddress: userSettings.companyAddress || DEFAULT_BRAND_SETTINGS.companyAddress,
       themeColor: (userSettings.themeColor as ThemeColor) || DEFAULT_BRAND_SETTINGS.themeColor,
       customColor: userSettings.customColor || DEFAULT_BRAND_SETTINGS.customColor,
@@ -526,7 +530,7 @@ export default function BrandSettings({ settings }: BrandSettingsProps) {
             <div className="space-y-6">
               <div className="grid grid-cols-1 gap-6">
                 <div className="space-y-3">
-                  <Label htmlFor="titleText">{t("Title Text")}</Label>
+                  <Label htmlFor="titleText">{t("Company Name")}</Label>
                   <Input
                     id="titleText"
                     name="titleText"
@@ -535,7 +539,7 @@ export default function BrandSettings({ settings }: BrandSettingsProps) {
                     placeholder="AfriPay HR"
                   />
                   <p className="text-xs text-muted-foreground">
-                    {t("Application title displayed in the browser tab")}
+                    {t("Company name displayed in the browser tab and application title")}
                   </p>
                 </div>
 
@@ -566,6 +570,21 @@ export default function BrandSettings({ settings }: BrandSettingsProps) {
                       />
                       <p className="text-xs text-muted-foreground">
                         {t("Company contact mobile number")}
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label htmlFor="companyEmail">{t("Company Email")}</Label>
+                      <Input
+                        id="companyEmail"
+                        name="companyEmail"
+                        type="email"
+                        value={brandSettings.companyEmail || ''}
+                        onChange={handleInputChange}
+                        placeholder="info@company.com"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {t("Company contact email address")}
                       </p>
                     </div>
 

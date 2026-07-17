@@ -118,6 +118,7 @@ class PayslipController extends Controller
 
         $generatedCount = 0;
         $errors         = [];
+        $generated      = []; // payslips created this request, for employee notifications
 
         foreach ($validated['payroll_entry_ids'] as $entryId) {
             try {
@@ -155,10 +156,17 @@ class PayslipController extends Controller
                     'created_by'       => creatorId(),
                 ]);
 
+                $generated[] = ['entry' => $payrollEntry, 'number' => $payslipNumber];
                 $generatedCount++;
             } catch (\Exception $e) {
                 $errors[] = "Failed to generate payslip for entry ID {$entryId}: " . $e->getMessage();
             }
+        }
+
+        // Notify employees their payslip is ready (best-effort — never blocks or
+        // fails payslip generation on a mail problem).
+        if (!empty($generated)) {
+            $this->notifyEmployeesOfPayslips($generated);
         }
 
         if ($generatedCount > 0) {
@@ -169,6 +177,62 @@ class PayslipController extends Controller
             return redirect()->back()->with('success', __($message));
         } else {
             return redirect()->back()->with('error', __('No payslips were generated. :errors', ['errors' => implode(', ', $errors)]));
+        }
+    }
+
+    /**
+     * Email each employee that their payslip has been generated.
+     *
+     * Best-effort: guarded by a per-company kill-switch and only attempted when
+     * SMTP is configured, so it never blocks or fails the generation request.
+     *
+     * @param  array<int, array{entry: \App\Models\PayrollEntry, number: string}>  $generated
+     */
+    private function notifyEmployeesOfPayslips(array $generated): void
+    {
+        // Kill-switch (defaults on). Set setting 'notify_employee_on_payslip' = '0' to disable.
+        if ((string) getSetting('notify_employee_on_payslip', '1') === '0') {
+            return;
+        }
+
+        // Skip entirely if SMTP isn't configured — avoids a logged failure per employee.
+        if (!getSetting('email_host') || !getSetting('email_username') || !getSetting('email_password')) {
+            return;
+        }
+
+        $service = app(\App\Services\EmailTemplateService::class);
+
+        foreach ($generated as $item) {
+            $entry = $item['entry'];
+            $user  = $entry->employee; // linked User (type = employee)
+            $email = $user?->email;
+            if (empty($email)) {
+                continue;
+            }
+
+            $run    = $entry->payrollRun;
+            $period = optional($run?->pay_period_start)->format('d M Y') . ' – ' . optional($run?->pay_period_end)->format('d M Y');
+
+            $variables = [
+                '{employee_name}'  => $user->name ?? $entry->employee_name ?? __('Employee'),
+                '{payslip_number}' => $item['number'],
+                '{pay_period}'     => $period,
+                '{pay_date}'       => optional($run?->pay_date)->format('d M Y'),
+                '{app_name}'       => config('app.name'),
+                '{app_url}'        => config('app.url'),
+            ];
+
+            try {
+                $service->sendTemplateEmailWithLanguage(
+                    templateName: 'Payslip Generated',
+                    variables: $variables,
+                    toEmail: $email,
+                    toName: $user->name,
+                    language: $user->lang ?? 'en',
+                );
+            } catch (\Throwable $e) {
+                \Log::warning("Payslip notification failed for {$email}: " . $e->getMessage());
+            }
         }
     }
 

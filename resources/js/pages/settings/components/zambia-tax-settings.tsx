@@ -10,6 +10,7 @@ import { useState } from 'react';
 
 interface ZambiaTaxSettingsProps {
   settings: Record<string, string>;
+  canEdit?: boolean;
 }
 
 // ✅ Field moved OUTSIDE to prevent remount on every keystroke
@@ -43,8 +44,9 @@ const Field = ({ label, fieldKey, hint, readOnly = false, value, error, onChange
   </div>
 );
 
-export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) {
+export default function ZambiaTaxSettings({ settings, canEdit = true }: ZambiaTaxSettingsProps) {
   const { t } = useTranslation();
+  const ro = !canEdit;
 
   const [form, setForm] = useState({
     zambia_paye_slab_1_min:  settings.zambia_paye_slab_1_min  ?? '0',
@@ -52,13 +54,13 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
     zambia_paye_slab_1_rate: settings.zambia_paye_slab_1_rate ?? '0',
     zambia_paye_slab_2_min:  settings.zambia_paye_slab_2_min  ?? '5100.01',
     zambia_paye_slab_2_max:  settings.zambia_paye_slab_2_max  ?? '7100',
-    zambia_paye_slab_2_rate: settings.zambia_paye_slab_2_rate ?? '25',
+    zambia_paye_slab_2_rate: settings.zambia_paye_slab_2_rate ?? '20',
     zambia_paye_slab_3_min:  settings.zambia_paye_slab_3_min  ?? '7100.01',
     zambia_paye_slab_3_max:  settings.zambia_paye_slab_3_max  ?? '9200',
     zambia_paye_slab_3_rate: settings.zambia_paye_slab_3_rate ?? '30',
-    zambia_paye_slab_4_min:  settings.zambia_paye_slab_4_min  ?? '9201.01',
+    zambia_paye_slab_4_min:  settings.zambia_paye_slab_4_min  ?? '9200.01',
     zambia_paye_slab_4_max:  settings.zambia_paye_slab_4_max  ?? '999999999',
-    zambia_paye_slab_4_rate: settings.zambia_paye_slab_4_rate ?? '35',
+    zambia_paye_slab_4_rate: settings.zambia_paye_slab_4_rate ?? '37',
     zambia_napsa_employee_rate: settings.zambia_napsa_employee_rate ?? '5',
     zambia_napsa_employer_rate: settings.zambia_napsa_employer_rate ?? '5',
     zambia_napsa_monthly_cap:   settings.zambia_napsa_monthly_cap   ?? '1073.20',
@@ -84,6 +86,7 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (ro) return; // companies cannot edit; Super Admin controls these globally
     setIsSubmitting(true);
     setSaved(false);
     router.post(route('settings.zambia-tax.update'), form, {
@@ -112,7 +115,7 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
       hint: t('Tax-free band — ZMW 0 to 5,100'),
     },
     {
-      label: t('Slab 2'), badge: '25%',
+      label: t('Slab 2'), badge: '20%',
       badgeColor: 'bg-yellow-50 text-yellow-700 ring-yellow-600/20',
       minKey: 'zambia_paye_slab_2_min', maxKey: 'zambia_paye_slab_2_max', rateKey: 'zambia_paye_slab_2_rate',
       hint: t('Low rate band — ZMW 5,100.01 to 7,100'),
@@ -124,10 +127,10 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
       hint: t('Mid rate band — ZMW 7,100.01 to 9,200'),
     },
     {
-      label: t('Slab 4'), badge: '35%',
+      label: t('Slab 4'), badge: '37%',
       badgeColor: 'bg-red-50 text-red-700 ring-red-600/20',
       minKey: 'zambia_paye_slab_4_min', maxKey: 'zambia_paye_slab_4_max', rateKey: 'zambia_paye_slab_4_rate',
-      hint: t('Top rate band — ZMW 9,201.01 and above'),
+      hint: t('Top rate band — ZMW 9,200.01 and above'),
     },
   ];
 
@@ -142,6 +145,11 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
           <p className="text-xs mt-0.5 text-blue-600 dark:text-blue-300">
             {t('All values are per month in ZMW. Changes take effect on the next payroll run.')}
           </p>
+          {ro && (
+            <p className="text-xs mt-1 font-medium text-blue-700 dark:text-blue-200">
+              {t('These rates are managed centrally by the Super Admin and apply to all companies. They are shown here for reference only.')}
+            </p>
+          )}
         </div>
       </div>
 
@@ -170,7 +178,7 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
                   value={form[slab.minKey as keyof typeof form]}
                   error={errors[slab.minKey]}
                   onChange={handleChange}
-                  readOnly={index === 0}
+                  readOnly={ro || index === 0}
                 />
                 <Field
                   label={index === 3 ? t('Max (ZMW) — leave as 999999999') : t('Max (ZMW)')}
@@ -178,7 +186,7 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
                   value={form[slab.maxKey as keyof typeof form]}
                   error={errors[slab.maxKey]}
                   onChange={handleChange}
-                  readOnly={index === 3}
+                  readOnly={ro || index === 3}
                 />
                 <Field
                   label={t('Rate (%)')}
@@ -186,6 +194,7 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
                   value={form[slab.rateKey as keyof typeof form]}
                   error={errors[slab.rateKey]}
                   onChange={handleChange}
+                  readOnly={ro}
                 />
               </div>
             </div>
@@ -209,6 +218,7 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
               value={form.zambia_napsa_employee_rate}
               error={errors.zambia_napsa_employee_rate}
               onChange={handleChange}
+              readOnly={ro}
               hint={t('Default: 5% of basic salary')}
             />
             <Field
@@ -217,6 +227,7 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
               value={form.zambia_napsa_employer_rate}
               error={errors.zambia_napsa_employer_rate}
               onChange={handleChange}
+              readOnly={ro}
               hint={t('Default: 5% of basic salary')}
             />
             <Field
@@ -225,6 +236,7 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
               value={form.zambia_napsa_monthly_cap}
               error={errors.zambia_napsa_monthly_cap}
               onChange={handleChange}
+              readOnly={ro}
               hint={t('NAPSA stops at this salary ceiling')}
             />
           </div>
@@ -251,6 +263,7 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
               value={form.zambia_nhima_employee_rate}
               error={errors.zambia_nhima_employee_rate}
               onChange={handleChange}
+              readOnly={ro}
               hint={t('Default: 1% of basic salary')}
             />
             <Field
@@ -259,6 +272,7 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
               value={form.zambia_nhima_employer_rate}
               error={errors.zambia_nhima_employer_rate}
               onChange={handleChange}
+              readOnly={ro}
               hint={t('Default: 1% of basic salary')}
             />
           </div>
@@ -285,6 +299,7 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
               value={form.zambia_sdl_rate}
               error={errors.zambia_sdl_rate}
               onChange={handleChange}
+              readOnly={ro}
               hint={t('Calculated on total payroll — not per employee')}
             />
             <div className="flex items-center">
@@ -313,6 +328,7 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
               value={form.zambia_pension_relief_cap}
               error={errors.zambia_pension_relief_cap}
               onChange={handleChange}
+              readOnly={ro}
               hint={t('Maximum pension amount that qualifies for PAYE relief per month')}
             />
             <div className="flex items-center">
@@ -341,16 +357,18 @@ export default function ZambiaTaxSettings({ settings }: ZambiaTaxSettingsProps) 
             </span>
           )}
         </div>
-        <Button type="submit" disabled={isSubmitting} className="min-w-40">
-          {isSubmitting ? (
-            <span className="flex items-center gap-2">
-              <span className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              {t('Saving...')}
-            </span>
-          ) : (
-            t('Save Zambia Tax Settings')
-          )}
-        </Button>
+        {!ro && (
+          <Button type="submit" disabled={isSubmitting} className="min-w-40">
+            {isSubmitting ? (
+              <span className="flex items-center gap-2">
+                <span className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                {t('Saving...')}
+              </span>
+            ) : (
+              t('Save Zambia Tax Settings')
+            )}
+          </Button>
+        )}
       </div>
 
     </form>

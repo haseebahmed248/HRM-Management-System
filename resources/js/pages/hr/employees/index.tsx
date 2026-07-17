@@ -296,23 +296,13 @@ export default function Employees() {
         }
     };
 
-    // Helper: POST form download for employee reports
+    // Helper: GET download for employee reports. The Zambia report routes are
+    // registered as GET — submitting a POST form to them returns HTTP 405.
     const downloadEmployeeReport = (routeName: string, extraFields: Record<string, string> = {}) => {
-        const csrfToken = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '';
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = route(routeName);
-        form.target = '_blank';
-        const addField = (n: string, v: string) => {
-            const input = document.createElement('input');
-            input.type = 'hidden'; input.name = n; input.value = v;
-            form.appendChild(input);
-        };
-        addField('_token', csrfToken);
-        Object.entries(extraFields).forEach(([k, v]) => addField(k, v));
-        document.body.appendChild(form);
-        form.submit();
-        document.body.removeChild(form);
+        const params = new URLSearchParams(extraFields);
+        const qs = params.toString();
+        const url = route(routeName) + (qs ? '?' + qs : '');
+        window.open(url, '_blank');
         toast.success(t('Report download started'));
     };
 
@@ -935,32 +925,55 @@ export default function Employees() {
                 )}
                 modalSize="xl"
                 databaseFields={[
-                    { key: 'name', required: true },
-                    { key: 'email', required: true },
-                    { key: 'password', required: true },
+                    // Identity — the import composes the full name from these.
+                    { key: 'title' },
+                    { key: 'first_name', required: true },
+                    { key: 'middle_name' },
+                    { key: 'last_name' },
+                    { key: 'email' },
+                    { key: 'password' },
                     { key: 'employee_id' },
                     { key: 'biometric_emp_id' },
-                    { key: 'phone', required: true },
+                    { key: 'phone' },
+                    { key: 'date_of_birth' },
+                    { key: 'gender' },
+                    { key: 'nationality' },
+                    { key: 'marital_status' },
+                    // Job details (match existing records by name)
                     { key: 'department' },
                     { key: 'designation' },
                     { key: 'branch' },
-                    { key: 'base_salary', required: true },
-                    { key: 'date_of_joining', required: true },
-                    { key: 'date_of_birth', required: true },
-                    { key: 'gender', required: true },
                     { key: 'shift' },
                     { key: 'attendance_policy' },
+                    { key: 'date_of_joining' },
+                    { key: 'base_salary' },
                     { key: 'employment_type' },
                     { key: 'employee_status' },
-                    { key: 'city', required: true },
-                    { key: 'state', required: true },
-                    { key: 'country', required: true },
-                    { key: 'postal_code', required: true },
-                    { key: 'address', required: true },
-                    { key: 'bank_name', required: true },
-                    { key: 'account_number', required: true },
-                    { key: 'bank_identifier_code', required: true },
-                    { key: 'bank_branch', required: true },
+                    // Address
+                    { key: 'address_line_1' },
+                    { key: 'address_line_2' },
+                    { key: 'city' },
+                    { key: 'state' },
+                    { key: 'country' },
+                    { key: 'postal_code' },
+                    // Banking
+                    { key: 'bank_name' },
+                    { key: 'account_holder_name' },
+                    { key: 'account_number' },
+                    { key: 'bank_identifier_code' },
+                    { key: 'bank_branch' },
+                    { key: 'payment_method' },
+                    // Zambia statutory
+                    { key: 'tpin' },
+                    { key: 'nrc' },
+                    { key: 'passport_no' },
+                    { key: 'permit_no' },
+                    { key: 'napsa_number' },
+                    { key: 'nhima_number' },
+                    { key: 'exempt_from_napsa' },
+                    { key: 'exempt_from_nhima' },
+                    { key: 'exempt_from_sdl' },
+                    { key: 'exempt_from_paye' },
                 ]}
             />
         </PageTemplate>

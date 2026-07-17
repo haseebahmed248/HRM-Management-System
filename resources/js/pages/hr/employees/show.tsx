@@ -684,7 +684,24 @@ export default function EmployeeShow() {
                                             <h3 className="mb-3 text-xs font-medium tracking-wide text-gray-500 dark:text-gray-400">
                                                 {t('Statutory Exemptions')}
                                             </h3>
-                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                <div className="flex items-center gap-2 rounded-md border p-3">
+                                                    <span
+                                                        className={`inline-flex h-5 w-5 items-center justify-center rounded text-xs font-bold ${
+                                                            employee.employee?.exempt_from_paye
+                                                                ? 'bg-red-100 text-red-700'
+                                                                : 'bg-green-100 text-green-700'
+                                                        }`}
+                                                    >
+                                                        {employee.employee?.exempt_from_paye ? '✕' : '✓'}
+                                                    </span>
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{t('PAYE')}</p>
+                                                        <p className="text-muted-foreground text-xs">
+                                                            {employee.employee?.exempt_from_paye ? t('Exempt') : t('Contributing')}
+                                                        </p>
+                                                    </div>
+                                                </div>
                                                 <div className="flex items-center gap-2 rounded-md border p-3">
                                                     <span
                                                         className={`inline-flex h-5 w-5 items-center justify-center rounded text-xs font-bold ${

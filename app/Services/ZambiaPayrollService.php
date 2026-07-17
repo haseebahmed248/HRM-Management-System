@@ -10,7 +10,12 @@ class ZambiaPayrollService
 
     public function __construct(int $creatorId)
     {
-        $this->settings = Setting::where('user_id', $creatorId)
+        // Zambia tax settings are controlled globally by the Super Admin, so the
+        // payroll calc always reads the Super Admin's values (falling back to the
+        // given creator id only if no Super Admin exists). Hardcoded ZRA defaults
+        // in each calc method cover any key the Super Admin hasn't set.
+        $scopeId = getSuperAdminId() ?? $creatorId;
+        $this->settings = Setting::where('user_id', $scopeId)
             ->where('key', 'like', 'zambia_%')
             ->pluck('value', 'key')
             ->toArray();
@@ -35,39 +40,43 @@ class ZambiaPayrollService
         $relief    = max(0.0, min($pensionContribution, $reliefCap));
         $taxableIncome = max(0.0, $grossSalary - $relief);
 
+        // PAYE bands are contiguous: each band's lower bound is the previous
+        // band's ceiling (`max`). We compute the amount of income falling inside
+        // each band as `min(income, thisMax) - previousMax`. This matches the ZRA
+        // PAYE method exactly (0 / 20% / 30% / 37% on the 5,100 / 7,100 / 9,200
+        // thresholds) and is independent of how the "min" boundary is entered
+        // (5100, 5100.01 or 5101 all give the same, correct result).
         $slabs = [
             [
-                'min'  => (float) ($this->settings['zambia_paye_slab_1_min'] ?? 0),
                 'max'  => (float) ($this->settings['zambia_paye_slab_1_max'] ?? 5100),
                 'rate' => (float) ($this->settings['zambia_paye_slab_1_rate'] ?? 0) / 100,
             ],
             [
-                'min'  => (float) ($this->settings['zambia_paye_slab_2_min'] ?? 5100.01),
                 'max'  => (float) ($this->settings['zambia_paye_slab_2_max'] ?? 7100),
-                'rate' => (float) ($this->settings['zambia_paye_slab_2_rate'] ?? 25) / 100,
+                'rate' => (float) ($this->settings['zambia_paye_slab_2_rate'] ?? 20) / 100,
             ],
             [
-                'min'  => (float) ($this->settings['zambia_paye_slab_3_min'] ?? 7100.01),
                 'max'  => (float) ($this->settings['zambia_paye_slab_3_max'] ?? 9200),
                 'rate' => (float) ($this->settings['zambia_paye_slab_3_rate'] ?? 30) / 100,
             ],
             [
-                'min'  => (float) ($this->settings['zambia_paye_slab_4_min'] ?? 9201.01),
                 'max'  => (float) ($this->settings['zambia_paye_slab_4_max'] ?? 999999999),
-                'rate' => (float) ($this->settings['zambia_paye_slab_4_rate'] ?? 35) / 100,
+                'rate' => (float) ($this->settings['zambia_paye_slab_4_rate'] ?? 37) / 100,
             ],
         ];
 
-        $tax = 0.0;
+        $tax   = 0.0;
+        $lower = 0.0;
 
         foreach ($slabs as $slab) {
-            if ($taxableIncome <= 0 || $taxableIncome < $slab['min']) {
-                continue;
+            $upper = $slab['max'];
+            if ($taxableIncome > $lower) {
+                $amountInBand = min($taxableIncome, $upper) - $lower;
+                if ($amountInBand > 0) {
+                    $tax += $amountInBand * $slab['rate'];
+                }
             }
-            $taxable = min($taxableIncome, $slab['max']) - ($slab['min'] - 1);
-            if ($taxable > 0) {
-                $tax += $taxable * $slab['rate'];
-            }
+            $lower = $upper;
         }
 
         return round($tax, 2);
@@ -145,12 +154,14 @@ class ZambiaPayrollService
         float $basicSalary = 0,
         bool $exemptNapsa = false,
         bool $exemptNhima = false,
-        float $pensionContribution = 0.0
+        float $pensionContribution = 0.0,
+        bool $exemptPaye = false
     ): array {
         // track-a/10: forward pension contribution into PAYE so the existing
         // cap-and-subtract logic applies. PAYE is the only statutory tax
         // that gets the relief — NAPSA / NHIMA / SDL still use raw gross.
-        $paye  = $this->calculatePAYE($grossPay, $pensionContribution);
+        // An employee flagged exempt_from_paye pays zero PAYE.
+        $paye  = $exemptPaye ? 0.0 : $this->calculatePAYE($grossPay, $pensionContribution);
         $napsa = $this->calculateNAPSA($grossPay, $exemptNapsa);
 
         // ── NHIMA fix: use basicSalary, fallback to grossPay if not provided ──

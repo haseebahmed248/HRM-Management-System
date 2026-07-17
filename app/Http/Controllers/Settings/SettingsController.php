@@ -44,13 +44,13 @@ $zambiaDefaults = [
     'zambia_paye_slab_1_rate'    => '0',
     'zambia_paye_slab_2_min'     => '5100.01',
     'zambia_paye_slab_2_max'     => '7100',
-    'zambia_paye_slab_2_rate'    => '25',
+    'zambia_paye_slab_2_rate'    => '20',
     'zambia_paye_slab_3_min'     => '7100.01',
     'zambia_paye_slab_3_max'     => '9200',
     'zambia_paye_slab_3_rate'    => '30',
-    'zambia_paye_slab_4_min'     => '9201.01',
+    'zambia_paye_slab_4_min'     => '9200.01',
     'zambia_paye_slab_4_max'     => '999999999',
-    'zambia_paye_slab_4_rate'    => '35',
+    'zambia_paye_slab_4_rate'    => '37',
     'zambia_napsa_employee_rate' => '5',
     'zambia_napsa_employer_rate' => '5',
     'zambia_napsa_monthly_cap'   => '1073.20',
@@ -59,17 +59,25 @@ $zambiaDefaults = [
     'zambia_sdl_rate'            => '0.5',
 ];
 
+// Zambia tax settings are global — always read from the Super Admin so every
+// company sees (and payroll uses) the same Super-Admin-controlled values.
 $zambiaTaxSettings = array_merge(
     $zambiaDefaults,
-    Setting::where('user_id', creatorId())
+    Setting::where('user_id', getSuperAdminId() ?? creatorId())
         ->where('key', 'like', 'zambia_%')
         ->pluck('value', 'key')
         ->toArray()
 );
 
+        $employeeIdSettings = [
+            'employee_id_prefix'  => $systemSettings['employee_id_prefix'] ?? 'EMP',
+            'employee_id_padding' => $systemSettings['employee_id_padding'] ?? 6,
+        ];
+
         return Inertia::render('settings/index', [
             'systemSettings'                  => $systemSettings,
             'settings'                        => $systemSettings,
+            'employeeIdSettings'              => $employeeIdSettings,
             'cacheSize'                       => getCacheSize(),
             'currencies'                      => $currencies,
             'timezones'                       => config('timezones'),

@@ -24,6 +24,12 @@ Route::middleware(['guest', 'landing.enabled'])->group(function () {
 
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
 
+    // Company picker shown when one email/password is valid for several companies.
+    Route::get('login/select-company', [AuthenticatedSessionController::class, 'showCompanySelect'])
+        ->name('login.company-select');
+    Route::post('login/select-company', [AuthenticatedSessionController::class, 'storeCompanySelect'])
+        ->name('login.company-select.store');
+
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');
 

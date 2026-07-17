@@ -214,6 +214,7 @@ class PayrollRun extends BaseModel
         // ── Get exemption flags from employee record ──────────────────────────
         $exemptNapsa = $employeeRecord?->exempt_from_napsa ?? false;
         $exemptNhima = $employeeRecord?->exempt_from_nhima ?? false;
+        $exemptPaye  = $employeeRecord?->exempt_from_paye ?? false;
 
         // ── track-a/10: sum employee's pension contributions for PAYE relief.
         // Admins mark a salary component as a pension via calculation_type
@@ -246,7 +247,8 @@ class PayrollRun extends BaseModel
             $employeeSalary->basic_salary,
             $exemptNapsa,
             $exemptNhima,
-            $pensionContribution
+            $pensionContribution,
+            $exemptPaye
         );
 
         // ────────────────────────────────────────────────────────────────────
@@ -325,9 +327,10 @@ class PayrollRun extends BaseModel
 
         // ── Build deductions breakdown ────────────────────────────────────────
         // Statutory deductions (skip if exempt)
-        $statutoryDeductions = [
-            ['name' => 'PAYE Tax', 'amount' => $zambia['paye'], 'type' => 'zambia_paye'],
-        ];
+        $statutoryDeductions = [];
+        if (!$exemptPaye) {
+            $statutoryDeductions[] = ['name' => 'PAYE Tax', 'amount' => $zambia['paye'], 'type' => 'zambia_paye'];
+        }
         if (!$exemptNapsa) {
             $statutoryDeductions[] = [
                 'name'   => 'NAPSA Employee',

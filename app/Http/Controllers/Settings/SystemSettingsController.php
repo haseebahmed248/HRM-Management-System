@@ -55,7 +55,20 @@ class SystemSettingsController extends Controller
     public function updateBrand(Request $request)
     {
         try {
-            $userId = auth()->id();
+            // Resolve the settings owner the SAME way settings()/getSetting reads
+            // them, so brand assets are scoped per COMPANY (not per logged-in
+            // sub-user). Without this, an HR/admin sub-user uploading a logo would
+            // write it under their own id and it would never be read back.
+            $authUser = auth()->user();
+            if (isSaas()) {
+                $userId = in_array($authUser->type, ['superadmin', 'company'])
+                    ? $authUser->id
+                    : (getCompanyId($authUser->created_by) ?? $authUser->id);
+            } else {
+                $userId = $authUser->type === 'company'
+                    ? $authUser->id
+                    : (getCompanyId($authUser->id) ?? $authUser->id);
+            }
 
             // Ensure the logo storage directory exists
             Storage::disk('public')->makeDirectory('media/logo');
@@ -103,6 +116,7 @@ class SystemSettingsController extends Controller
                 'settings.titleText'      => 'nullable|string|max:255',
                 'settings.footerText'     => 'nullable|string|max:500',
                 'settings.companyMobile'  => 'nullable|string|max:20',
+                'settings.companyEmail'   => 'nullable|string|email|max:255',
                 'settings.companyAddress' => 'nullable|string',
                 'settings.themeColor'     => 'nullable|string|in:blue,green,purple,orange,red,custom',
                 'settings.customColor'    => 'nullable|string|regex:/^#[0-9A-Fa-f]{6}$/',
@@ -125,6 +139,38 @@ class SystemSettingsController extends Controller
             return redirect()->back()->with('success', __('Brand settings updated successfully.'));
         } catch (\Exception $e) {
             return redirect()->back()->with('error', __('Failed to update brand settings: :error', ['error' => $e->getMessage()]));
+        }
+    }
+
+    /**
+     * Update the per-company employee-ID format (prefix + zero-padding).
+     */
+    public function updateEmployeeIdSettings(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'employee_id_prefix'  => 'nullable|string|max:10',
+                'employee_id_padding' => 'required|integer|min:1|max:12',
+            ]);
+
+            // Scope to the COMPANY the same way settings()/getSetting reads them.
+            $authUser = auth()->user();
+            if (isSaas()) {
+                $userId = in_array($authUser->type, ['superadmin', 'company'])
+                    ? $authUser->id
+                    : (getCompanyId($authUser->created_by) ?? $authUser->id);
+            } else {
+                $userId = $authUser->type === 'company'
+                    ? $authUser->id
+                    : (getCompanyId($authUser->id) ?? $authUser->id);
+            }
+
+            updateSetting('employee_id_prefix', trim((string) ($validated['employee_id_prefix'] ?? 'EMP')), $userId);
+            updateSetting('employee_id_padding', (string) $validated['employee_id_padding'], $userId);
+
+            return redirect()->back()->with('success', __('Employee ID settings updated successfully.'));
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', __('Failed to update employee ID settings: :error', ['error' => $e->getMessage()]));
         }
     }
 

@@ -628,6 +628,7 @@ class ZambiaReportController extends Controller
         $run     = $this->getPayrollRun($request->payroll_run_id);
         $entries = $this->getFilteredEntries($request->payroll_run_id, $request);
         $format  = $request->input('format', 'csv');
+        $groupBy = $request->input('group_by');
 
         // Statutory types to exclude from dynamic columns
         $statutoryEarningTypes   = ['basic_salary', 'zambia_napsa_employer', 'zambia_nhima_employer', 'zambia_sdl'];
@@ -651,92 +652,98 @@ class ZambiaReportController extends Controller
         $earningCompNames   = $earningCompNames->unique()->values()->toArray();
         $deductionCompNames = $deductionCompNames->unique()->values()->toArray();
 
-        $rows = $entries->map(function ($e) use ($earningCompNames, $deductionCompNames) {
-            $emp      = $e->employee?->employee ?? null;
-            $paye     = $this->getDeductionAmount($e, 'zambia_paye');
-            $napsaEmp = $this->getDeductionAmount($e, 'zambia_napsa_employee');
-            $nhimaEmp = $this->getDeductionAmount($e, 'zambia_nhima_employee');
-            $napsaEmr = $this->getEarningAmount($e, 'zambia_napsa_employer');
-            $nhimaEmr = $this->getEarningAmount($e, 'zambia_nhima_employer');
-            $sdl      = $this->getEarningAmount($e, 'zambia_sdl');
+        // Row builder for a collection of entries (columns are fixed across all groups)
+        $buildRows = function ($groupEntries) use ($earningCompNames, $deductionCompNames) {
+            return $groupEntries->map(function ($e) use ($earningCompNames, $deductionCompNames) {
+                $emp      = $e->employee?->employee ?? null;
+                $paye     = $this->getDeductionAmount($e, 'zambia_paye');
+                $napsaEmp = $this->getDeductionAmount($e, 'zambia_napsa_employee');
+                $nhimaEmp = $this->getDeductionAmount($e, 'zambia_nhima_employee');
+                $napsaEmr = $this->getEarningAmount($e, 'zambia_napsa_employer');
+                $nhimaEmr = $this->getEarningAmount($e, 'zambia_nhima_employer');
+                $sdl      = $this->getEarningAmount($e, 'zambia_sdl');
 
-            $row = [
-                $e->employee?->name ?? $e->employee_name ?? 'Unknown',
-                $emp->tpin ?? 'N/A',
-                number_format($e->basic_salary, 2, '.', ''),
-            ];
+                $row = [
+                    $e->employee?->name ?? $e->employee_name ?? 'Unknown',
+                    $emp->tpin ?? 'N/A',
+                    number_format($e->basic_salary, 2, '.', ''),
+                ];
 
-            // One column per non-statutory earning component
+                // One column per non-statutory earning component
+                foreach ($earningCompNames as $compName) {
+                    $amount = 0.0;
+                    foreach ($e->earnings_breakdown ?? [] as $item) {
+                        if (is_array($item) && ($item['name'] ?? '') === $compName) {
+                            $amount = (float) $item['amount'];
+                            break;
+                        }
+                    }
+                    $row[] = number_format($amount, 2, '.', '');
+                }
+
+                $row[] = number_format($e->gross_pay, 2, '.', '');
+                $row[] = number_format($paye, 2, '.', '');
+                $row[] = number_format($napsaEmp, 2, '.', '');
+                $row[] = number_format($nhimaEmp, 2, '.', '');
+
+                // One column per non-statutory deduction component
+                foreach ($deductionCompNames as $compName) {
+                    $amount = 0.0;
+                    foreach ($e->deductions_breakdown ?? [] as $item) {
+                        if (is_array($item) && ($item['name'] ?? '') === $compName) {
+                            $amount = (float) $item['amount'];
+                            break;
+                        }
+                    }
+                    $row[] = number_format($amount, 2, '.', '');
+                }
+
+                $row[] = number_format($e->total_deductions, 2, '.', '');
+                $row[] = number_format($e->net_pay, 2, '.', '');
+                $row[] = number_format($napsaEmr, 2, '.', '');
+                $row[] = number_format($nhimaEmr, 2, '.', '');
+                $row[] = number_format($sdl, 2, '.', '');
+
+                return $row;
+            })->toArray();
+        };
+
+        // Totals-row builder for a collection of entries
+        $buildTotals = function ($groupEntries, $label = 'TOTALS') use ($earningCompNames, $deductionCompNames) {
+            $totalsRow = [$label, '', number_format($groupEntries->sum('basic_salary'), 2, '.', '')];
             foreach ($earningCompNames as $compName) {
-                $amount = 0.0;
-                foreach ($e->earnings_breakdown ?? [] as $item) {
-                    if (is_array($item) && ($item['name'] ?? '') === $compName) {
-                        $amount = (float) $item['amount'];
-                        break;
+                $totalsRow[] = number_format($groupEntries->sum(function ($e) use ($compName) {
+                    foreach ($e->earnings_breakdown ?? [] as $item) {
+                        if (is_array($item) && ($item['name'] ?? '') === $compName) {
+                            return (float) $item['amount'];
+                        }
                     }
-                }
-                $row[] = number_format($amount, 2, '.', '');
+                    return 0.0;
+                }), 2, '.', '');
             }
-
-            $row[] = number_format($e->gross_pay, 2, '.', '');
-            $row[] = number_format($paye, 2, '.', '');
-            $row[] = number_format($napsaEmp, 2, '.', '');
-            $row[] = number_format($nhimaEmp, 2, '.', '');
-
-            // One column per non-statutory deduction component
+            $totalsRow[] = number_format($groupEntries->sum('gross_pay'), 2, '.', '');
+            $totalsRow[] = number_format($groupEntries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_paye')), 2, '.', '');
+            $totalsRow[] = number_format($groupEntries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_napsa_employee')), 2, '.', '');
+            $totalsRow[] = number_format($groupEntries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_nhima_employee')), 2, '.', '');
             foreach ($deductionCompNames as $compName) {
-                $amount = 0.0;
-                foreach ($e->deductions_breakdown ?? [] as $item) {
-                    if (is_array($item) && ($item['name'] ?? '') === $compName) {
-                        $amount = (float) $item['amount'];
-                        break;
+                $totalsRow[] = number_format($groupEntries->sum(function ($e) use ($compName) {
+                    foreach ($e->deductions_breakdown ?? [] as $item) {
+                        if (is_array($item) && ($item['name'] ?? '') === $compName) {
+                            return (float) $item['amount'];
+                        }
                     }
-                }
-                $row[] = number_format($amount, 2, '.', '');
+                    return 0.0;
+                }), 2, '.', '');
             }
+            $totalsRow[] = number_format($groupEntries->sum('total_deductions'), 2, '.', '');
+            $totalsRow[] = number_format($groupEntries->sum('net_pay'), 2, '.', '');
+            $totalsRow[] = number_format($groupEntries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_napsa_employer')), 2, '.', '');
+            $totalsRow[] = number_format($groupEntries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_nhima_employer')), 2, '.', '');
+            $totalsRow[] = number_format($groupEntries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_sdl')), 2, '.', '');
+            return $totalsRow;
+        };
 
-            $row[] = number_format($e->total_deductions, 2, '.', '');
-            $row[] = number_format($e->net_pay, 2, '.', '');
-            $row[] = number_format($napsaEmr, 2, '.', '');
-            $row[] = number_format($nhimaEmr, 2, '.', '');
-            $row[] = number_format($sdl, 2, '.', '');
-
-            return $row;
-        })->toArray();
-
-        // Build totals row
-        $totalsRow = ['TOTALS', '', number_format($entries->sum('basic_salary'), 2, '.', '')];
-        foreach ($earningCompNames as $compName) {
-            $totalsRow[] = number_format($entries->sum(function ($e) use ($compName) {
-                foreach ($e->earnings_breakdown ?? [] as $item) {
-                    if (is_array($item) && ($item['name'] ?? '') === $compName) {
-                        return (float) $item['amount'];
-                    }
-                }
-                return 0.0;
-            }), 2, '.', '');
-        }
-        $totalsRow[] = number_format($entries->sum('gross_pay'), 2, '.', '');
-        $totalsRow[] = number_format($entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_paye')), 2, '.', '');
-        $totalsRow[] = number_format($entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_napsa_employee')), 2, '.', '');
-        $totalsRow[] = number_format($entries->sum(fn($e) => $this->getDeductionAmount($e, 'zambia_nhima_employee')), 2, '.', '');
-        foreach ($deductionCompNames as $compName) {
-            $totalsRow[] = number_format($entries->sum(function ($e) use ($compName) {
-                foreach ($e->deductions_breakdown ?? [] as $item) {
-                    if (is_array($item) && ($item['name'] ?? '') === $compName) {
-                        return (float) $item['amount'];
-                    }
-                }
-                return 0.0;
-            }), 2, '.', '');
-        }
-        $totalsRow[] = number_format($entries->sum('total_deductions'), 2, '.', '');
-        $totalsRow[] = number_format($entries->sum('net_pay'), 2, '.', '');
-        $totalsRow[] = number_format($entries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_napsa_employer')), 2, '.', '');
-        $totalsRow[] = number_format($entries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_nhima_employer')), 2, '.', '');
-        $totalsRow[] = number_format($entries->sum(fn($e) => $this->getEarningAmount($e, 'zambia_sdl')), 2, '.', '');
-
-        // Build headers dynamically
+        // Build headers dynamically (shared across all groups so columns stay aligned)
         $headers = ['Employee Name', 'TPIN', 'Basic Salary'];
         foreach ($earningCompNames as $name) {
             $headers[] = $name;
@@ -754,20 +761,42 @@ class ZambiaReportController extends Controller
         $headers[] = 'NHIMA (Emr)';
         $headers[] = 'SDL';
 
+        $grouped = $this->groupEntries($entries, $groupBy);
+
         $sections = [
             ['type' => 'title', 'content' => 'Payroll Detailed Report — ' . $run->pay_period_start->format('F Y')],
             ['type' => 'info', 'rows' => [
                 ['Pay Period', $run->pay_period_start->format('d M Y') . ' – ' . $run->pay_period_end->format('d M Y')],
                 ['Pay Date', $run->pay_date->format('d M Y')],
                 ['Total Employees', $entries->count()],
+                ...($groupBy ? [['Grouped By', ucfirst($groupBy)]] : []),
             ]],
             ['type' => 'blank'],
-            ['type' => 'table',
-                'headers' => $headers,
-                'rows'    => $rows,
-                'totals'  => $totalsRow,
-            ],
         ];
+
+        foreach ($grouped as $groupName => $groupEntries) {
+            $sections[] = [
+                'type'    => 'table',
+                'title'   => $groupName ? "{$groupName} — Detailed ({$groupEntries->count()})" : null,
+                'headers' => $headers,
+                'rows'    => $buildRows($groupEntries),
+                'totals'  => $buildTotals($groupEntries),
+            ];
+            if ($groupName) {
+                $sections[] = ['type' => 'blank'];
+            }
+        }
+
+        // Grand totals across all groups
+        if ($groupBy && count($grouped) > 1) {
+            $sections[] = [
+                'type'    => 'table',
+                'title'   => 'GRAND TOTALS — All Groups',
+                'headers' => $headers,
+                'rows'    => [],
+                'totals'  => $buildTotals($entries, 'GRAND TOTALS'),
+            ];
+        }
 
         return $this->exportSections($format, 'Payroll_Detailed_' . $run->pay_period_start->format('M_Y'), $sections);
     }

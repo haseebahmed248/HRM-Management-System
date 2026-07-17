@@ -69,6 +69,7 @@ Route::middleware(['auth', 'verified', 'plan.access'])->group(function () {
     // System Settings routes
     Route::post('settings/system', [SystemSettingsController::class, 'update'])->name('settings.system.update');
     Route::post('settings/brand', [SystemSettingsController::class, 'updateBrand'])->name('settings.brand.update');
+    Route::post('settings/employee-id', [SystemSettingsController::class, 'updateEmployeeIdSettings'])->name('settings.employee-id.update');
     Route::post('settings/storage', [SystemSettingsController::class, 'updateStorage'])->name('settings.storage.update');
     Route::post('settings/recaptcha', [SystemSettingsController::class, 'updateRecaptcha'])->name('settings.recaptcha.update');
     Route::post('settings/chatgpt', [SystemSettingsController::class, 'updateChatgpt'])->name('settings.chatgpt.update');

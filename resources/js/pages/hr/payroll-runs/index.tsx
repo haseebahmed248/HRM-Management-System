@@ -80,21 +80,11 @@ export default function PayrollRuns() {
 
   // ── Report download helper ──────────────────────────────────────────────────
   const downloadRunReport = (routeName: string, runId: string | number) => {
-    const csrfToken = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || '';
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = route(routeName);
-    form.target = '_blank';
-    const addField = (n: string, v: string) => {
-      const input = document.createElement('input');
-      input.type = 'hidden'; input.name = n; input.value = v;
-      form.appendChild(input);
-    };
-    addField('_token', csrfToken);
-    addField('payroll_run_id', String(runId));
-    document.body.appendChild(form);
-    form.submit();
-    document.body.removeChild(form);
+    // Zambia report routes are registered as GET — open via query string (a POST
+    // to these GET-only routes returns HTTP 405).
+    const params = new URLSearchParams({ payroll_run_id: String(runId) });
+    const url = route(routeName) + '?' + params.toString();
+    window.open(url, '_blank');
     toast.success(t('Report download started'));
   };
 

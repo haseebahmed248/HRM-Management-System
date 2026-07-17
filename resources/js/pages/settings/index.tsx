@@ -31,6 +31,7 @@ import NocSettings from './components/noc-settings';
 import ExperienceCertificateSettings from './components/experience-certificate-settings';
 import JoiningLetterSettings from './components/joining-letter-settings';
 import ZambiaTaxSettings from './components/zambia-tax-settings';
+import EmployeeIdSettings from './components/employee-id-settings';
 import { Toaster } from '@/components/ui/toaster';
 import { useTranslation } from 'react-i18next';
 import { useLayout } from '@/contexts/LayoutContext';
@@ -55,6 +56,7 @@ export default function Settings() {
     experienceCertificateTemplates = [],
     languages = [],
     zambiaTaxSettings = {},
+    employeeIdSettings = {},
   } = usePage().props as any;
 
   const isSaas = globalSettings?.is_saas;
@@ -128,6 +130,12 @@ export default function Settings() {
       permission: 'manage-zambia-tax-settings'
     },
     {
+      title: t('Employee ID Format'),
+      href: '#employee-id-settings',
+      icon: <FileText className="h-4 w-4 mr-2" />,
+      permission: 'manage-system-settings'
+    },
+    {
       title: t('Payment Settings'),
       href: '#payment-settings',
       icon: <CreditCard className="h-4 w-4 mr-2" />,
@@ -178,7 +186,8 @@ export default function Settings() {
     if (item.permission === 'manage-noc' && auth.user?.type === 'superadmin') return false;
     if (item.permission === 'manage-experience-certificate' && auth.user?.type === 'superadmin') return false;
     if (item.permission === 'manage-joining-letter' && auth.user?.type === 'superadmin') return false;
-    if (item.permission === 'manage-zambia-tax-settings' && auth.user?.type === 'superadmin') return false;
+    // Zambia tax settings: Super Admin edits it; companies see it read-only.
+    if (item.permission === 'manage-zambia-tax-settings') return auth.user?.type === 'superadmin' || auth.user?.type === 'company';
 
     if (!item.permission || (auth.permissions && auth.permissions.includes(item.permission))) return true;
 
@@ -424,10 +433,17 @@ export default function Settings() {
             </section>
           )}
 
-          {/* Zambia Tax Settings */}
-          {(auth.user?.type === 'company' || auth.permissions?.includes('manage-zambia-tax-settings')) && (
+          {/* Zambia Tax Settings — Super Admin controls it globally; companies see it read-only */}
+          {(auth.user?.type === 'company' || auth.user?.type === 'superadmin' || auth.permissions?.includes('manage-zambia-tax-settings')) && (
             <section id="zambia-tax-settings" ref={zambiaTaxSettingsRef} className="mb-8">
-              <ZambiaTaxSettings settings={zambiaTaxSettings} />
+              <ZambiaTaxSettings settings={zambiaTaxSettings} canEdit={auth.user?.type === 'superadmin'} />
+            </section>
+          )}
+
+          {/* Employee ID Format */}
+          {auth.user?.type !== 'superadmin' && (auth.user?.type === 'company' || auth.permissions?.includes('manage-system-settings')) && (
+            <section id="employee-id-settings" className="mb-8">
+              <EmployeeIdSettings settings={employeeIdSettings} />
             </section>
           )}
 

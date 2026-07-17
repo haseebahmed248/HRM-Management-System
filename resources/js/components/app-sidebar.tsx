@@ -180,6 +180,13 @@ export function AppSidebar() {
             });
         }
 
+        if (hasPermission(permissions, 'manage-staff-tiers')) {
+            hrChildren.push({
+                title: t('Staff Tiers'),
+                href: route('hr.staff-tiers.index')
+            });
+        }
+
         if (hasPermission(permissions, 'manage-document-types')) {
             hrChildren.push({
                 title: t('Document Types'),

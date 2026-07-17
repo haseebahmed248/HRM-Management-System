@@ -8,6 +8,7 @@ use App\Models\Branch;
 use App\Models\Candidate;
 use App\Models\Department;
 use App\Models\Designation;
+use App\Models\StaffTier;
 use App\Models\DocumentType;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
@@ -180,6 +181,10 @@ class EmployeeController extends Controller
                 ->where('status', 'active')
                 ->get(['id', 'name']);
 
+            $staffTiers = StaffTier::whereIn('created_by', getCompanyAndUsersId())
+                ->where('status', 'active')
+                ->get(['id', 'name']);
+
             $documentTypes = DocumentType::whereIn('created_by', getCompanyAndUsersId())
                 ->get(['id', 'name', 'is_required']);
 
@@ -195,6 +200,7 @@ class EmployeeController extends Controller
                 'branches' => $branches,
                 'departments' => $departments,
                 'designations' => $designations,
+                'staffTiers' => $staffTiers,
                 'documentTypes' => $documentTypes,
                 'shifts' => $shifts,
                 'attendancePolicies' => $attendancePolicies,
@@ -232,6 +238,9 @@ class EmployeeController extends Controller
                     'date_of_birth' => 'required|date|before:' . now()->subYears(18)->format('Y-m-d'),
                     'gender' => 'required|in:male,female',
                     'profile_image' => ['nullable', 'string', image_media_reference_rule()],
+                    // Allow a manual / free-format employee ID; falls back to the
+                    // per-company generated format when left blank.
+                    'employee_id' => 'nullable|string|max:50|unique:employees,employee_id',
                     'shift_id' => 'nullable|exists:shifts,id',
                     'attendance_policy_id' => 'nullable|exists:attendance_policies,id',
                     'branch_id' => 'nullable|exists:branches,id',
@@ -242,6 +251,9 @@ class EmployeeController extends Controller
                     'employee_status' => 'nullable|string|max:50',
                     // track-a/11: senior/junior payroll tier
                     'staff_tier' => 'nullable|in:senior,junior',
+                    // Company-defined staff tier (managed lookup) — separate from
+                    // the senior/junior payroll-access tier above.
+                    'staff_tier_id' => 'nullable|exists:staff_tiers,id',
                     'napsa_number' => 'nullable|string|max:50',
                     'nhima_number' => 'nullable|string|max:50',
                     'salary' => 'nullable|numeric|min:0',
@@ -299,7 +311,10 @@ class EmployeeController extends Controller
 
                 $employee = new Employee;
                 $employee->user_id = $user->id;
-                $employee->employee_id = Employee::generateEmployeeId();
+                // Manual/free-format ID if supplied, otherwise per-company generated.
+                $employee->employee_id = $request->filled('employee_id')
+                    ? trim($request->employee_id)
+                    : Employee::generateEmployeeId();
                 $employee->created_by = creatorId();
                 $employee->biometric_emp_id = $request->biometric_emp_id;
                 $employee->title = $request->title;
@@ -318,6 +333,7 @@ class EmployeeController extends Controller
                 $employee->branch_id = $request->branch_id;
                 $employee->department_id = $request->department_id;
                 $employee->designation_id = $request->designation_id;
+                $employee->staff_tier_id = $request->staff_tier_id;
                 $employee->shift_id = $request->shift_id;
                 $employee->attendance_policy_id = $request->attendance_policy_id;
                 $employee->date_of_joining = $request->date_of_joining;
@@ -346,6 +362,7 @@ class EmployeeController extends Controller
                 $employee->exempt_from_napsa = $request->boolean('exempt_from_napsa');
                 $employee->exempt_from_nhima = $request->boolean('exempt_from_nhima');
                 $employee->exempt_from_sdl = $request->boolean('exempt_from_sdl');
+                $employee->exempt_from_paye = $request->boolean('exempt_from_paye');
                 $employee->save();
 
                 if ($request->has('documents') && is_array($request->documents)) {
@@ -431,6 +448,10 @@ class EmployeeController extends Controller
                 ->where('status', 'active')
                 ->get(['id', 'name']);
 
+            $staffTiers = StaffTier::whereIn('created_by', getCompanyAndUsersId())
+                ->where('status', 'active')
+                ->get(['id', 'name']);
+
             $documentTypes = DocumentType::whereIn('created_by', getCompanyAndUsersId())
                 ->get(['id', 'name', 'is_required']);
 
@@ -447,6 +468,7 @@ class EmployeeController extends Controller
                 'branches' => $branches,
                 'departments' => $departments,
                 'designations' => $designations,
+                'staffTiers' => $staffTiers,
                 'documentTypes' => $documentTypes,
                 'shifts' => $shifts,
                 'attendancePolicies' => $attendancePolicies,
@@ -500,6 +522,9 @@ class EmployeeController extends Controller
                     'employee_status' => 'nullable|string|max:50',
                     // track-a/11: senior/junior payroll tier
                     'staff_tier' => 'nullable|in:senior,junior',
+                    // Company-defined staff tier (managed lookup) — separate from
+                    // the senior/junior payroll-access tier above.
+                    'staff_tier_id' => 'nullable|exists:staff_tiers,id',
                     'napsa_number' => 'nullable|string|max:50',
                     'nhima_number' => 'nullable|string|max:50',
                     'salary' => 'nullable|numeric|min:0',
@@ -563,6 +588,8 @@ class EmployeeController extends Controller
                 $employee->branch_id = $request->branch_id;
                 $employee->department_id = $request->department_id;
                 $employee->designation_id = $request->designation_id;
+                // Preserve existing tier if the payload omits the field.
+                $employee->staff_tier_id = $request->has('staff_tier_id') ? $request->staff_tier_id : $employee->staff_tier_id;
                 $employee->shift_id = $request->shift_id;
                 $employee->attendance_policy_id = $request->attendance_policy_id;
                 $employee->date_of_joining = $request->date_of_joining;
@@ -591,6 +618,7 @@ class EmployeeController extends Controller
                 $employee->exempt_from_napsa = $request->boolean('exempt_from_napsa');
                 $employee->exempt_from_nhima = $request->boolean('exempt_from_nhima');
                 $employee->exempt_from_sdl = $request->boolean('exempt_from_sdl');
+                $employee->exempt_from_paye = $request->boolean('exempt_from_paye');
                 $employee->save();
 
                 if ($request->has('documents') && is_array($request->documents)) {
@@ -822,7 +850,7 @@ class EmployeeController extends Controller
                 'Address Line 1', 'Address Line 2', 'City', 'State', 'Country', 'Postal Code',
                 'Bank Name', 'Account Holder Name', 'Account Number', 'Bank Identifier Code', 'Bank Branch',
                 'Payment Method', 'TPIN', 'NRC', 'Passport No', 'Permit No',
-                'NAPSA Number', 'NHIMA Number', 'Exempt From NAPSA', 'Exempt From NHIMA', 'Exempt From SDL',
+                'NAPSA Number', 'NHIMA Number', 'Exempt From NAPSA', 'Exempt From NHIMA', 'Exempt From SDL', 'Exempt From PAYE',
             ];
 
             foreach ($headers as $colIndex => $header) {
@@ -848,7 +876,7 @@ class EmployeeController extends Controller
                 '123 Cairo Road', '', 'Lusaka', 'Lusaka', 'Zambia', '10101',
                 'Zanaco (Zambia National Commercial Bank)', 'John Banda', '0123456789', '', '',
                 'EFT', '1234567890', '123456/10/1', '', '',
-                '', '', '0', '0', '0',
+                '', '', '0', '0', '0', '0',
             ];
 
             foreach ($sampleRow as $colIndex => $value) {
@@ -1389,7 +1417,14 @@ class EmployeeController extends Controller
                         $paymentMethod = $row['payment_method'] ?? null;
                         if ($paymentMethod === 'Bank Transfer') $paymentMethod = 'EFT';
 
-                        DB::transaction(function () use ($row, $fullName, $email, $password, $branchId, $departmentId, $designationId, $shiftId, $attendancePolicyId, $dateOfJoining, $dateOfBirth, $employeeId, $paymentMethod, &$imported) {
+                        // Parse exemption flags leniently (accepts 1/yes/y/true/t/exempt).
+                        $parseBool = fn ($v) => in_array(strtolower(trim((string) $v)), ['1', 'yes', 'y', 'true', 't', 'exempt'], true) ? 1 : 0;
+                        $exemptNapsa = $parseBool($row['exempt_from_napsa'] ?? '');
+                        $exemptNhima = $parseBool($row['exempt_from_nhima'] ?? '');
+                        $exemptSdl   = $parseBool($row['exempt_from_sdl'] ?? '');
+                        $exemptPaye  = $parseBool($row['exempt_from_paye'] ?? '');
+
+                        DB::transaction(function () use ($row, $fullName, $email, $password, $branchId, $departmentId, $designationId, $shiftId, $attendancePolicyId, $dateOfJoining, $dateOfBirth, $employeeId, $paymentMethod, $exemptNapsa, $exemptNhima, $exemptSdl, $exemptPaye, &$imported) {
                             $user = User::create([
                                 'name' => $fullName,
                                 'email' => $email,
@@ -1451,9 +1486,10 @@ class EmployeeController extends Controller
                                 'permit_no'           => $row['permit_no'] ?? null,
                                 'napsa_number'        => $row['napsa_number'] ?? null,
                                 'nhima_number'        => $row['nhima_number'] ?? null,
-                                'exempt_from_napsa'   => !empty($row['exempt_from_napsa']) ? (int)$row['exempt_from_napsa'] : 0,
-                                'exempt_from_nhima'   => !empty($row['exempt_from_nhima']) ? (int)$row['exempt_from_nhima'] : 0,
-                                'exempt_from_sdl'     => !empty($row['exempt_from_sdl']) ? (int)$row['exempt_from_sdl'] : 0,
+                                'exempt_from_napsa'   => $exemptNapsa,
+                                'exempt_from_nhima'   => $exemptNhima,
+                                'exempt_from_sdl'     => $exemptSdl,
+                                'exempt_from_paye'    => $exemptPaye,
                                 'created_by'          => creatorId(),
                             ]);
 

@@ -84,7 +84,9 @@ class SalaryComponentController extends Controller
             // qualifying for PAYE relief (capped per Zambia Tax Settings).
             // It behaves like `fixed` for amount purposes — uses default_amount.
             'calculation_type' => 'required|in:fixed,percentage,zambia_pension',
-            'default_amount' => 'required_if:calculation_type,fixed,zambia_pension|nullable|numeric|min:0',
+            // Allow blank/zero for fixed components (e.g. placeholder fixed
+            // components set per-employee later) — a blank amount saves as 0.
+            'default_amount' => 'nullable|numeric|min:0',
             'percentage_of_basic' => 'required_if:calculation_type,percentage|nullable|numeric|min:0|max:100',
             'is_taxable' => 'boolean',
             'is_mandatory' => 'boolean',
@@ -100,6 +102,9 @@ class SalaryComponentController extends Controller
         // track-a/10: zambia_pension uses default_amount like 'fixed'.
         if (in_array($validated['calculation_type'], ['fixed', 'zambia_pension'], true)) {
             $validated['percentage_of_basic'] = null;
+            $validated['default_amount'] = ($validated['default_amount'] === null || $validated['default_amount'] === '')
+                ? 0
+                : $validated['default_amount'];
         } else {
             $validated['default_amount'] = 0;
         }
@@ -132,7 +137,9 @@ class SalaryComponentController extends Controller
                     'type' => 'required|in:earning,deduction',
                     // track-a/10: accept zambia_pension (behaves like fixed for amount)
                     'calculation_type' => 'required|in:fixed,percentage,zambia_pension',
-                    'default_amount' => 'required_if:calculation_type,fixed,zambia_pension|nullable|numeric|min:0',
+                    // Allow blank/zero for fixed components (e.g. placeholder fixed
+            // components set per-employee later) — a blank amount saves as 0.
+            'default_amount' => 'nullable|numeric|min:0',
                     'percentage_of_basic' => 'required_if:calculation_type,percentage|nullable|numeric|min:0|max:100',
                     'is_taxable' => 'boolean',
                     'is_mandatory' => 'boolean',

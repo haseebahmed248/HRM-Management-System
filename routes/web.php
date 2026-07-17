@@ -97,6 +97,7 @@ use App\Http\Controllers\ContractTemplateController;
 use App\Http\Controllers\ContractTypeController;
 use App\Http\Controllers\CustomQuestionController;
 use App\Http\Controllers\DesignationController;
+use App\Http\Controllers\StaffTierController;
 use App\Http\Controllers\DocumentAcknowledgmentController;
 use App\Http\Controllers\DocumentCategoryController;
 use App\Http\Controllers\DocumentTemplateController;
@@ -394,6 +395,15 @@ Route::middleware(['auth', 'verified', 'setting'])->group(function () {
             Route::put('hr/designations/{designation}', [DesignationController::class, 'update'])->middleware('permission:edit-designations')->name('hr.designations.update');
             Route::delete('hr/designations/{designation}', [DesignationController::class, 'destroy'])->middleware('permission:delete-designations')->name('hr.designations.destroy');
             Route::put('hr/designations/{designation}/toggle-status', [DesignationController::class, 'toggleStatus'])->middleware('permission:toggle-status-designations')->name('hr.designations.toggle-status');
+        });
+
+        // Staff Tier routes
+        Route::middleware('permission:manage-staff-tiers')->group(function () {
+            Route::get('hr/staff-tiers', [StaffTierController::class, 'index'])->name('hr.staff-tiers.index');
+            Route::post('hr/staff-tiers', [StaffTierController::class, 'store'])->middleware('permission:create-staff-tiers')->name('hr.staff-tiers.store');
+            Route::put('hr/staff-tiers/{staffTier}', [StaffTierController::class, 'update'])->middleware('permission:edit-staff-tiers')->name('hr.staff-tiers.update');
+            Route::delete('hr/staff-tiers/{staffTier}', [StaffTierController::class, 'destroy'])->middleware('permission:delete-staff-tiers')->name('hr.staff-tiers.destroy');
+            Route::put('hr/staff-tiers/{staffTier}/toggle-status', [StaffTierController::class, 'toggleStatus'])->middleware('permission:toggle-status-staff-tiers')->name('hr.staff-tiers.toggle-status');
         });
 
         // Documenttype Routes

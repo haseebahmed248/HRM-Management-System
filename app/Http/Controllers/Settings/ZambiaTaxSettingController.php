@@ -12,9 +12,10 @@ class ZambiaTaxSettingController extends Controller
 {
     public function update(Request $request)
     {
-        // if (!Auth::user()->can('manage-zambia-tax-settings')) {
-        //     return redirect()->back()->with('error', __('Permission Denied.'));
-        // }
+        // Zambia tax settings are controlled globally by the Super Admin only.
+        if (Auth::user()->type !== 'superadmin') {
+            return redirect()->back()->with('error', __('Only the Super Admin can change Zambia tax settings.'));
+        }
 
         $validator = Validator::make($request->all(), [
             // PAYE Slabs
@@ -47,7 +48,8 @@ class ZambiaTaxSettingController extends Controller
             return redirect()->back()->withErrors($validator)->withInput();
         }
 
-        $userId = creatorId();
+        // Store globally under the Super Admin so all companies inherit one set.
+        $userId = getSuperAdminId() ?? creatorId();
 
         $keys = [
             'zambia_paye_slab_1_min', 'zambia_paye_slab_1_max', 'zambia_paye_slab_1_rate',
