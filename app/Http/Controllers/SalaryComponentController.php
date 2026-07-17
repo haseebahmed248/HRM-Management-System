@@ -102,9 +102,10 @@ class SalaryComponentController extends Controller
         // track-a/10: zambia_pension uses default_amount like 'fixed'.
         if (in_array($validated['calculation_type'], ['fixed', 'zambia_pension'], true)) {
             $validated['percentage_of_basic'] = null;
-            $validated['default_amount'] = ($validated['default_amount'] === null || $validated['default_amount'] === '')
-                ? 0
-                : $validated['default_amount'];
+            // Amount may be absent, null, or '' when the user leaves it blank — all
+            // of those mean zero. (Accessing the key directly would 500 when absent.)
+            $amount = $validated['default_amount'] ?? null;
+            $validated['default_amount'] = ($amount === null || $amount === '') ? 0 : $amount;
         } else {
             $validated['default_amount'] = 0;
         }
@@ -150,6 +151,9 @@ class SalaryComponentController extends Controller
                 // track-a/10: zambia_pension uses default_amount like 'fixed'.
                 if (in_array($validated['calculation_type'], ['fixed', 'zambia_pension'], true)) {
                     $validated['percentage_of_basic'] = null;
+                    // Blank/absent amount means zero.
+                    $amount = $validated['default_amount'] ?? null;
+                    $validated['default_amount'] = ($amount === null || $amount === '') ? 0 : $amount;
                 } else {
                     $validated['default_amount'] = 0;
                 }
