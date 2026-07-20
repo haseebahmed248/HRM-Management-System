@@ -1111,37 +1111,32 @@ if (! function_exists('creatorId')) {
 if (! function_exists('getCompanyAndUsersId')) {
     function getCompanyAndUsersId()
     {
+        // Memoised for the lifetime of the request: this is called hundreds of
+        // times per request across the controllers, and each call previously
+        // re-walked the entire company user hierarchy (one query per user).
+        // Safe to cache — users created during a request are always children of
+        // an id already in this set, so scoped `whereIn` lookups still match.
+        static $memo = [];
+
         $user = Auth::user();
-        if ($user->hasRole(['company'])) {
-            $companyId = getCompanyId($user->id);
-            if ($companyId) {
-                // Get all users in the company hierarchy
-                $allUsers = getAllCompanyUsers($companyId);
-                $allUsers[] = $companyId; // Include company itself
-
-                return array_unique($allUsers);
-            }
-
-            return [];
-
-            // Old code
-            // $companyUserIds = User::where('created_by', $user->id)->pluck('id')->toArray();
-            // $companyUserIds[] = $user->id;
-            // return $companyUserIds;
-
-        } else {
-            // Find the root company ID using recursive function
-            $companyId = getCompanyId($user->id);
-            if ($companyId) {
-                // Get all users in the company hierarchy
-                $allUsers = getAllCompanyUsers($companyId);
-                $allUsers[] = $companyId; // Include company itself
-
-                return array_unique($allUsers);
-            }
-
+        if (! $user) {
             return [];
         }
+
+        if (array_key_exists($user->id, $memo)) {
+            return $memo[$user->id];
+        }
+
+        // Company and non-company users both resolve to the same root company scope.
+        $companyId = getCompanyId($user->id);
+        if (! $companyId) {
+            return $memo[$user->id] = [];
+        }
+
+        $allUsers = getAllCompanyUsers($companyId);
+        $allUsers[] = $companyId; // Include company itself
+
+        return $memo[$user->id] = array_unique($allUsers);
     }
 }
 
@@ -1149,14 +1144,31 @@ if (! function_exists('getCompanyAndUsersId')) {
 if (! function_exists('getAllCompanyUsers')) {
     function getAllCompanyUsers($companyId, &$allUsers = [])
     {
-        // Get direct users created by this company/user
-        $directUsers = User::where('created_by', $companyId)->pluck('id')->toArray();
-        foreach ($directUsers as $userId) {
-            if (! in_array($userId, $allUsers)) {
-                $allUsers[] = $userId;
-                // Recursively get users created by this user
-                getAllCompanyUsers($userId, $allUsers);
+        // Breadth-first: one query per hierarchy level (typically 2-3) instead of
+        // one query per user. The previous per-user recursion issued N+1 queries
+        // and did an O(N^2) in_array scan, which exhausted PHP's memory limit once
+        // tenants grew to hundreds of employees. Returns the same set of ids.
+        $seen = [];
+        foreach ($allUsers as $existing) {
+            $seen[(int) $existing] = true;
+        }
+
+        $frontier = [(int) $companyId];
+
+        while (! empty($frontier)) {
+            $children = User::whereIn('created_by', $frontier)->pluck('id')->all();
+
+            $next = [];
+            foreach ($children as $childId) {
+                $childId = (int) $childId;
+                if (! isset($seen[$childId])) {
+                    $seen[$childId] = true;
+                    $allUsers[] = $childId;
+                    $next[] = $childId;
+                }
             }
+
+            $frontier = $next;
         }
 
         return $allUsers;
