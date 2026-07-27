@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FinancialYear;
+use App\Models\FinancialYearAudit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -108,6 +109,12 @@ class FinancialYearController extends Controller
                 $financialYear->markAsCurrent();
             }
 
+            $financialYear->logAudit('created', __('Created period :name (:start to :end)', [
+                'name'  => $financialYear->name,
+                'start' => $financialYear->start_date->toDateString(),
+                'end'   => $financialYear->end_date->toDateString(),
+            ]));
+
             return redirect()->back()->with('success', __('Financial year created successfully.'));
         } catch (\Exception $e) {
             return redirect()->back()->with('error', $e->getMessage() ?: __('Failed to create financial year.'));
@@ -183,6 +190,8 @@ class FinancialYearController extends Controller
                 $financialYear->markAsCurrent();
             }
 
+            $financialYear->logAudit('updated', __('Updated period details for :name', ['name' => $financialYear->name]));
+
             return redirect()->back()->with('success', __('Financial year updated successfully.'));
         } catch (\Exception $e) {
             return redirect()->back()->with('error', $e->getMessage() ?: __('Failed to update financial year.'));
@@ -212,6 +221,7 @@ class FinancialYearController extends Controller
         }
 
         try {
+            $financialYear->logAudit('deleted', __('Deleted period :name', ['name' => $financialYear->name]));
             $financialYear->delete();
             return redirect()->back()->with('success', __('Financial year deleted successfully.'));
         } catch (\Exception $e) {
@@ -242,6 +252,7 @@ class FinancialYearController extends Controller
 
         try {
             $financialYear->markAsCurrent();
+            $financialYear->logAudit('set_current', __('Set :name as the current period', ['name' => $financialYear->name]));
             return redirect()->back()->with('success', __('Financial year set as current.'));
         } catch (\Exception $e) {
             return redirect()->back()->with('error', $e->getMessage() ?: __('Failed to set current financial year.'));
@@ -271,6 +282,7 @@ class FinancialYearController extends Controller
 
         try {
             $financialYear->close();
+            $financialYear->logAudit('closed', __('Closed period :name', ['name' => $financialYear->name]));
             return redirect()->back()->with('success', __('Financial year closed successfully.'));
         } catch (\Exception $e) {
             return redirect()->back()->with('error', $e->getMessage() ?: __('Failed to close financial year.'));
@@ -301,9 +313,45 @@ class FinancialYearController extends Controller
         try {
             $financialYear->status = 'active';
             $financialYear->save();
+            $financialYear->logAudit('reopened', __('Reopened period :name', ['name' => $financialYear->name]));
             return redirect()->back()->with('success', __('Financial year reopened successfully.'));
         } catch (\Exception $e) {
             return redirect()->back()->with('error', $e->getMessage() ?: __('Failed to reopen financial year.'));
         }
+    }
+
+    /**
+     * Read-only audit trail of all period changes (item 6).
+     */
+    public function auditLog(Request $request)
+    {
+        if (!Auth::user()->can('manage-payroll-settings')) {
+            return redirect()->back()->with('error', __('Permission Denied.'));
+        }
+
+        $query = FinancialYearAudit::whereIn('created_by', getCompanyAndUsersId());
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('financial_year_name', 'like', "%{$search}%")
+                    ->orWhere('action', 'like', "%{$search}%")
+                    ->orWhere('performed_by_name', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('action') && $request->action !== 'all') {
+            $query->where('action', $request->action);
+        }
+
+        $audits = $query->orderByDesc('created_at')
+            ->paginate($request->per_page ?? 15)
+            ->withQueryString();
+
+        return Inertia::render('hr/financial-years/audit-log', [
+            'audits'  => $audits,
+            'filters' => $request->all(['search', 'action', 'per_page']),
+        ]);
     }
 }

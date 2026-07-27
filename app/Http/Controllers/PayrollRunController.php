@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\Designation;
+use App\Models\FinancialYear;
 use App\Models\PayrollEntry;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
@@ -103,6 +104,31 @@ class PayrollRunController extends Controller
         }
     }
 
+    /**
+     * Item 6 — Payroll Processing Controls.
+     * Returns an error message if the given pay-period date falls inside a
+     * CLOSED financial period; null otherwise. When no financial period is
+     * defined for the date, payroll is allowed — companies not yet using
+     * financial periods are unaffected.
+     */
+    private function closedPeriodError($payPeriodDate): ?string
+    {
+        $fy = FinancialYear::periodForDate($payPeriodDate);
+        if ($fy && $fy->status === 'closed') {
+            return __('This pay period falls in the closed financial period ":name". An authorised user must reopen it before payroll can be processed or posted.', ['name' => $fy->name]);
+        }
+        return null;
+    }
+
+    /**
+     * The id of the active financial period covering a date (for linking), or null.
+     */
+    private function activePeriodId($payPeriodDate): ?int
+    {
+        $fy = FinancialYear::periodForDate($payPeriodDate);
+        return ($fy && $fy->status === 'active') ? $fy->id : null;
+    }
+
     public function store(Request $request)
     {
         if (Auth::user()->can('create-payroll-runs')) {
@@ -115,9 +141,15 @@ class PayrollRunController extends Controller
                 'notes'             => 'nullable|string',
             ]);
 
-            $validated['pay_date']   = $this->adjustPayDate($validated['pay_date']);
-            $validated['created_by'] = creatorId();
-            $validated['status']     = 'draft';
+            // Item 6: block creating a run inside a closed financial period.
+            if ($err = $this->closedPeriodError($validated['pay_period_end'])) {
+                return redirect()->back()->with('error', $err);
+            }
+
+            $validated['pay_date']          = $this->adjustPayDate($validated['pay_date']);
+            $validated['created_by']        = creatorId();
+            $validated['status']            = 'draft';
+            $validated['financial_year_id'] = $this->activePeriodId($validated['pay_period_end']);
 
             $exists = PayrollRun::where('pay_period_start', $validated['pay_period_start'])
                 ->where('pay_period_end', $validated['pay_period_end'])
@@ -212,6 +244,11 @@ class PayrollRunController extends Controller
                         return redirect()->back()->with('error', __('Payroll run cannot be processed in its current status.'));
                     }
 
+                    // Item 6: cannot process payroll inside a closed financial period.
+                    if ($err = $this->closedPeriodError($payrollRun->pay_period_end)) {
+                        return redirect()->back()->with('error', $err);
+                    }
+
                     $filters = array_filter([
                         'branch_id'      => $request->input('branch_id'),
                         'department_id'  => $request->input('department_id'),
@@ -282,6 +319,11 @@ class PayrollRunController extends Controller
                 return redirect()->back()->with('error', __('Only completed payroll runs can be submitted for final approval.'));
             }
 
+            // Item 6: cannot post/submit into a closed financial period.
+            if ($err = $this->closedPeriodError($payrollRun->pay_period_end)) {
+                return redirect()->back()->with('error', $err);
+            }
+
             // ── Block if any active/probation employee has not been processed ─────
             // track-a/11: only consider employees in the tiers the current user
             // is permitted to run payroll for; otherwise a junior payroll
@@ -344,6 +386,11 @@ class PayrollRunController extends Controller
 
             if ($payrollRun->status !== 'pending_approval') {
                 return redirect()->back()->with('error', __('Payroll run is not pending approval.'));
+            }
+
+            // Item 6: cannot approve/post into a closed financial period.
+            if ($err = $this->closedPeriodError($payrollRun->pay_period_end)) {
+                return redirect()->back()->with('error', $err);
             }
 
             $payrollRun->update([

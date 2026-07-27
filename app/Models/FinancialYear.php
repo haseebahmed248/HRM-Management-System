@@ -101,4 +101,50 @@ class FinancialYear extends BaseModel
         $this->is_current = false;
         $this->save();
     }
+
+    /**
+     * Audit trail entries for this financial year.
+     */
+    public function audits()
+    {
+        return $this->hasMany(FinancialYearAudit::class, 'financial_year_id');
+    }
+
+    /**
+     * Find the financial period (if any) covering a given date, within the
+     * current auth user's company scope. Returns null when no period is defined
+     * for that date — callers treat "no period" as allowed (graceful).
+     */
+    public static function periodForDate($date, ?array $scope = null): ?self
+    {
+        $date = is_string($date) ? \Carbon\Carbon::parse($date)->toDateString() : $date;
+        $scope = $scope ?? (auth()->check() ? getCompanyAndUsersId() : []);
+        if (empty($scope)) {
+            return null;
+        }
+
+        return static::whereIn('created_by', $scope)
+            ->whereDate('start_date', '<=', $date)
+            ->whereDate('end_date', '>=', $date)
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Record a change to this period in the audit trail (item 6).
+     */
+    public function logAudit(string $action, ?string $description = null): void
+    {
+        $user = auth()->user();
+
+        FinancialYearAudit::create([
+            'financial_year_id'   => $this->id,
+            'financial_year_name' => $this->name,
+            'action'              => $action,
+            'description'         => $description,
+            'performed_by'        => $user?->id,
+            'performed_by_name'   => $user?->name,
+            'created_by'          => $this->created_by,
+        ]);
+    }
 }

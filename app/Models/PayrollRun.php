@@ -21,6 +21,7 @@ class PayrollRun extends BaseModel
         'employee_count',
         'status',
         'notes',
+        'financial_year_id',
         'created_by',
         'unlocked_at',
         'unlocked_by',

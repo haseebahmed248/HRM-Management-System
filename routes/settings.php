@@ -131,6 +131,8 @@ Route::post('settings/zambia-tax/update',
     Route::middleware('permission:manage-payroll-settings')->group(function () {
         Route::get('hr/financial-years', [\App\Http\Controllers\FinancialYearController::class, 'index'])
             ->name('hr.financial-years.index');
+        Route::get('hr/financial-years/audit-log', [\App\Http\Controllers\FinancialYearController::class, 'auditLog'])
+            ->name('hr.financial-years.audit-log');
         Route::post('hr/financial-years', [\App\Http\Controllers\FinancialYearController::class, 'store'])
             ->name('hr.financial-years.store');
         Route::put('hr/financial-years/{id}', [\App\Http\Controllers\FinancialYearController::class, 'update'])

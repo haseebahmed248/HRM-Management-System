@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { PageTemplate } from '@/components/page-template';
 import { usePage, router } from '@inertiajs/react';
-import { Plus, Star, Lock, Unlock } from 'lucide-react';
+import { Plus, Star, Lock, Unlock, History } from 'lucide-react';
 import { hasPermission } from '@/utils/authorization';
 import { CrudTable } from '@/components/CrudTable';
 import { CrudFormModal } from '@/components/CrudFormModal';
@@ -304,6 +304,12 @@ export default function FinancialYears() {
   }> = [];
 
   if (hasPermission(permissions, 'manage-payroll-settings')) {
+    pageActions.push({
+      label: t('Audit Trail'),
+      icon: <History className="h-4 w-4 mr-2" />,
+      variant: 'outline',
+      onClick: () => router.get(route('hr.financial-years.audit-log'))
+    });
     pageActions.push({
       label: t('Add Financial Year'),
       icon: <Plus className="h-4 w-4 mr-2" />,
