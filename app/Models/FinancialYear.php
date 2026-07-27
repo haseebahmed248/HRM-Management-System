@@ -131,6 +131,41 @@ class FinancialYear extends BaseModel
     }
 
     /**
+     * Item 6 — the single source of truth for whether payroll may be
+     * processed/posted for a given pay-period date. Returns a human-readable
+     * reason to BLOCK, or null to ALLOW.
+     *
+     * Rules:
+     *  - date in a CLOSED period            → block (must reopen).
+     *  - date in an ACTIVE period           → allow.
+     *  - date in NO period, company uses    → block (must create/activate the
+     *    financial periods                    covering period first).
+     *  - date in NO period, company has     → allow (feature not in use;
+     *    zero financial periods               companies are never forced to
+     *                                          adopt periods to run payroll).
+     */
+    public static function payrollBlockReason($date): ?string
+    {
+        $scope = auth()->check() ? getCompanyAndUsersId() : [];
+        if (empty($scope)) {
+            return null;
+        }
+
+        $fy = static::periodForDate($date, $scope);
+
+        if ($fy && $fy->status === 'closed') {
+            return __('This pay period falls in the closed financial period ":name". An authorised user must reopen it before payroll can be processed or posted.', ['name' => $fy->name]);
+        }
+
+        if (! $fy && static::whereIn('created_by', $scope)->exists()) {
+            $dateStr = is_string($date) ? \Carbon\Carbon::parse($date)->toDateString() : $date->toDateString();
+            return __('This pay period (:date) is not within any active financial period. Create or activate the financial period that covers it before processing payroll.', ['date' => $dateStr]);
+        }
+
+        return null;
+    }
+
+    /**
      * Record a change to this period in the audit trail (item 6).
      */
     public function logAudit(string $action, ?string $description = null): void

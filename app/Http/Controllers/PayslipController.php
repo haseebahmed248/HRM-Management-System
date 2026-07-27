@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FinancialYear;
 use App\Models\PayrollEntry;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
@@ -115,6 +116,14 @@ class PayslipController extends Controller
             'payroll_entry_ids'   => 'required|array',
             'payroll_entry_ids.*' => 'exists:payroll_entries,id',
         ]);
+
+        // Item 6: do not post payslips into a closed / non-active financial period.
+        $runIds = PayrollEntry::whereIn('id', $validated['payroll_entry_ids'])->pluck('payroll_run_id')->unique();
+        foreach (PayrollRun::whereIn('id', $runIds)->get() as $r) {
+            if ($blk = FinancialYear::payrollBlockReason($r->pay_period_end)) {
+                return redirect()->back()->with('error', $blk);
+            }
+        }
 
         $generatedCount = 0;
         $errors         = [];
@@ -292,6 +301,12 @@ class PayslipController extends Controller
         $validated = $request->validate([
             'payroll_run_id' => 'required|exists:payroll_runs,id',
         ]);
+
+        // Item 6: do not post payslips into a closed / non-active financial period.
+        $run = PayrollRun::find($validated['payroll_run_id']);
+        if ($run && ($blk = FinancialYear::payrollBlockReason($run->pay_period_end))) {
+            return redirect()->back()->with('error', $blk);
+        }
 
         try {
             $payrollEntries = PayrollEntry::where('payroll_run_id', $validated['payroll_run_id'])

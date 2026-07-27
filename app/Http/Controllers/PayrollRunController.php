@@ -105,22 +105,6 @@ class PayrollRunController extends Controller
     }
 
     /**
-     * Item 6 — Payroll Processing Controls.
-     * Returns an error message if the given pay-period date falls inside a
-     * CLOSED financial period; null otherwise. When no financial period is
-     * defined for the date, payroll is allowed — companies not yet using
-     * financial periods are unaffected.
-     */
-    private function closedPeriodError($payPeriodDate): ?string
-    {
-        $fy = FinancialYear::periodForDate($payPeriodDate);
-        if ($fy && $fy->status === 'closed') {
-            return __('This pay period falls in the closed financial period ":name". An authorised user must reopen it before payroll can be processed or posted.', ['name' => $fy->name]);
-        }
-        return null;
-    }
-
-    /**
      * The id of the active financial period covering a date (for linking), or null.
      */
     private function activePeriodId($payPeriodDate): ?int
@@ -141,8 +125,10 @@ class PayrollRunController extends Controller
                 'notes'             => 'nullable|string',
             ]);
 
-            // Item 6: block creating a run inside a closed financial period.
-            if ($err = $this->closedPeriodError($validated['pay_period_end'])) {
+            // Item 6: payroll may only be created within an active financial period
+            // (blocks closed periods, and — for companies using periods — dates
+            // not covered by any active period).
+            if ($err = FinancialYear::payrollBlockReason($validated['pay_period_end'])) {
                 return redirect()->back()->with('error', $err);
             }
 
@@ -245,7 +231,7 @@ class PayrollRunController extends Controller
                     }
 
                     // Item 6: cannot process payroll inside a closed financial period.
-                    if ($err = $this->closedPeriodError($payrollRun->pay_period_end)) {
+                    if ($err = FinancialYear::payrollBlockReason($payrollRun->pay_period_end)) {
                         return redirect()->back()->with('error', $err);
                     }
 
@@ -320,7 +306,7 @@ class PayrollRunController extends Controller
             }
 
             // Item 6: cannot post/submit into a closed financial period.
-            if ($err = $this->closedPeriodError($payrollRun->pay_period_end)) {
+            if ($err = FinancialYear::payrollBlockReason($payrollRun->pay_period_end)) {
                 return redirect()->back()->with('error', $err);
             }
 
@@ -389,7 +375,7 @@ class PayrollRunController extends Controller
             }
 
             // Item 6: cannot approve/post into a closed financial period.
-            if ($err = $this->closedPeriodError($payrollRun->pay_period_end)) {
+            if ($err = FinancialYear::payrollBlockReason($payrollRun->pay_period_end)) {
                 return redirect()->back()->with('error', $err);
             }
 
