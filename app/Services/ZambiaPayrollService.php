@@ -155,13 +155,20 @@ class ZambiaPayrollService
         bool $exemptNapsa = false,
         bool $exemptNhima = false,
         float $pensionContribution = 0.0,
-        bool $exemptPaye = false
+        bool $exemptPaye = false,
+        float $nonTaxableEarnings = 0.0
     ): array {
         // track-a/10: forward pension contribution into PAYE so the existing
         // cap-and-subtract logic applies. PAYE is the only statutory tax
         // that gets the relief — NAPSA / NHIMA / SDL still use raw gross.
         // An employee flagged exempt_from_paye pays zero PAYE.
-        $paye  = $exemptPaye ? 0.0 : $this->calculatePAYE($grossPay, $pensionContribution);
+        //
+        // Non-taxable income components (salary components with is_taxable = false)
+        // are excluded from the PAYE base only: the employee still receives them
+        // in gross and net pay, and NAPSA / NHIMA are unaffected (they use raw
+        // gross / basic). This is the standard treatment of a tax-free allowance.
+        $payeGross = max(0.0, $grossPay - $nonTaxableEarnings);
+        $paye  = $exemptPaye ? 0.0 : $this->calculatePAYE($payeGross, $pensionContribution);
         $napsa = $this->calculateNAPSA($grossPay, $exemptNapsa);
 
         // ── NHIMA fix: use basicSalary, fallback to grossPay if not provided ──
@@ -189,6 +196,9 @@ class ZambiaPayrollService
             'pension_contribution' => round($pensionContribution, 2),
             'pension_relief'       => round($pensionRelief, 2),
             'pension_relief_cap'   => round($reliefCap, 2),
+            // Non-taxable income handling: what was excluded from the PAYE base.
+            'non_taxable_earnings' => round($nonTaxableEarnings, 2),
+            'paye_taxable_gross'   => round($payeGross, 2),
         ];
     }
 }

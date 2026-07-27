@@ -242,6 +242,30 @@ class PayrollRun extends BaseModel
             }
         }
 
+        // ── Non-taxable income components ─────────────────────────────────────
+        // Earning components flagged is_taxable = false are paid to the employee
+        // (they stay in gross + net pay) but are excluded from the PAYE base.
+        // Match them by name against the breakdown and sum, mirroring the
+        // pension-relief approach above. NAPSA / NHIMA are unaffected.
+        $nonTaxableEarningNames = \DB::table('salary_components')
+            ->whereIn('id', array_column($employeeSalary->getNormalisedComponents(), 'id'))
+            ->where('type', 'earning')
+            ->where('is_taxable', false)
+            ->where('status', 'active')
+            ->whereIn('created_by', getCompanyAndUsersId())
+            ->pluck('name')
+            ->map(fn ($n) => strtolower($n))
+            ->all();
+
+        $nonTaxableEarnings = 0.0;
+        foreach ($salaryBreakdown['earnings'] ?? [] as $k => $v) {
+            $name   = is_array($v) && isset($v['name']) ? $v['name'] : $k;
+            $amount = is_array($v) && isset($v['amount']) ? $v['amount'] : $v;
+            if (in_array(strtolower($name), $nonTaxableEarningNames, true)) {
+                $nonTaxableEarnings += (float) $amount;
+            }
+        }
+
         // ── Zambia statutory calculations ─────────────────────────────────────
         $zambia = $zambiaService->calculateFullPayroll(
             $grossPay,
@@ -249,7 +273,8 @@ class PayrollRun extends BaseModel
             $exemptNapsa,
             $exemptNhima,
             $pensionContribution,
-            $exemptPaye
+            $exemptPaye,
+            $nonTaxableEarnings
         );
 
         // ────────────────────────────────────────────────────────────────────

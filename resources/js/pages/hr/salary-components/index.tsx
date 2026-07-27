@@ -534,7 +534,7 @@ export default function SalaryComponents() {
             },
             { name: 'default_amount', label: t('Fixed Amount'), type: 'number', min: 0, step: 0.01 },
             { name: 'percentage_of_basic', label: t('Percentage of Basic'), type: 'number', min: 0, max: 100, step: 0.01 },
-            // { name: 'is_taxable', label: t('Is Taxable'), type: 'checkbox', defaultValue: true },
+            { name: 'is_taxable', label: t('Taxable (subject to PAYE)'), type: 'checkbox', defaultValue: true },
             // { name: 'is_mandatory', label: t('Is Mandatory'), type: 'checkbox', defaultValue: false },
             {
               name: 'status',
