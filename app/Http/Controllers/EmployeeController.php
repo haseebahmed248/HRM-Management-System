@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use App\Models\AttendancePolicy;
+use App\Models\Bank;
 use App\Models\Branch;
 use App\Models\Candidate;
 use App\Models\Department;
@@ -196,6 +197,11 @@ class EmployeeController extends Controller
                 ->where('status', 'active')
                 ->get(['id', 'name']);
 
+            $banks = Bank::whereIn('created_by', getCompanyAndUsersId())
+                ->where('status', 'active')
+                ->orderBy('name')
+                ->get(['id', 'name']);
+
             return Inertia::render('hr/employees/create', [
                 'branches' => $branches,
                 'departments' => $departments,
@@ -204,6 +210,7 @@ class EmployeeController extends Controller
                 'documentTypes' => $documentTypes,
                 'shifts' => $shifts,
                 'attendancePolicies' => $attendancePolicies,
+                'banks' => $banks,
                 'generatedEmployeeId' => Employee::generateEmployeeId(),
             ]);
         } else {
@@ -463,6 +470,11 @@ class EmployeeController extends Controller
                 ->where('status', 'active')
                 ->get(['id', 'name']);
 
+            $banks = Bank::whereIn('created_by', getCompanyAndUsersId())
+                ->where('status', 'active')
+                ->orderBy('name')
+                ->get(['id', 'name']);
+
             return Inertia::render('hr/employees/edit', [
                 'employee' => $user,
                 'branches' => $branches,
@@ -472,6 +484,7 @@ class EmployeeController extends Controller
                 'documentTypes' => $documentTypes,
                 'shifts' => $shifts,
                 'attendancePolicies' => $attendancePolicies,
+                'banks' => $banks,
             ]);
         } else {
             return redirect()->back()->with('error', __('Permission Denied.'));

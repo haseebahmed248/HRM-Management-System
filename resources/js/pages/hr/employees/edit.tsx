@@ -15,24 +15,6 @@ import { getImagePath } from '@/utils/helpers';
 import { ArrowLeft, Download, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-const ZAMBIAN_BANKS = [
-    'Zanaco (Zambia National Commercial Bank)',
-    'FNB Zambia (First National Bank)',
-    'Stanbic Bank Zambia',
-    'Absa Bank Zambia',
-    'Atlas Mara Bank Zambia',
-    'Citibank Zambia',
-    'Bank of China Zambia',
-    'Indo Zambia Bank',
-    'United Bank for Africa (UBA) Zambia',
-    'Access Bank Zambia',
-    'First Alliance Bank Zambia',
-    'Madison Finance',
-    'Investrust Bank Zambia',
-    'Development Bank of Zambia',
-    'Bank of Zambia',
-];
-
 const RELATIONSHIP_OPTIONS = [
     'Father', 'Mother', 'Son', 'Daughter', 'Sister',
     'Brother', 'Wife', 'Husband', 'Grandparent', 'Other',
@@ -40,7 +22,7 @@ const RELATIONSHIP_OPTIONS = [
 
 export default function EmployeeEdit() {
     const { t } = useTranslation();
-    const { employee, branches, departments, designations, staffTiers, documentTypes, shifts, attendancePolicies } = usePage().props as any;
+    const { employee, branches, departments, designations, staffTiers, documentTypes, shifts, attendancePolicies, banks } = usePage().props as any;
 
     const existingRelationship = employee.employee?.emergency_contact_relationship || '';
     const isOtherRelationship = existingRelationship !== '' && !RELATIONSHIP_OPTIONS.includes(existingRelationship);
@@ -898,8 +880,8 @@ export default function EmployeeEdit() {
                                             <SelectValue placeholder={t('Select Bank')} />
                                         </SelectTrigger>
                                         <SelectContent searchable={true}>
-                                            {ZAMBIAN_BANKS.map((bank) => (
-                                                <SelectItem key={bank} value={bank}>{bank}</SelectItem>
+                                            {(banks || []).map((bank: any) => (
+                                                <SelectItem key={bank.id} value={bank.name}>{bank.name}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>

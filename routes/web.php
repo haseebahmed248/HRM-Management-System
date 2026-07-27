@@ -98,6 +98,7 @@ use App\Http\Controllers\ContractTypeController;
 use App\Http\Controllers\CustomQuestionController;
 use App\Http\Controllers\DesignationController;
 use App\Http\Controllers\StaffTierController;
+use App\Http\Controllers\BankController;
 use App\Http\Controllers\DocumentAcknowledgmentController;
 use App\Http\Controllers\DocumentCategoryController;
 use App\Http\Controllers\DocumentTemplateController;
@@ -404,6 +405,15 @@ Route::middleware(['auth', 'verified', 'setting'])->group(function () {
             Route::put('hr/staff-tiers/{staffTier}', [StaffTierController::class, 'update'])->middleware('permission:edit-staff-tiers')->name('hr.staff-tiers.update');
             Route::delete('hr/staff-tiers/{staffTier}', [StaffTierController::class, 'destroy'])->middleware('permission:delete-staff-tiers')->name('hr.staff-tiers.destroy');
             Route::put('hr/staff-tiers/{staffTier}/toggle-status', [StaffTierController::class, 'toggleStatus'])->middleware('permission:toggle-status-staff-tiers')->name('hr.staff-tiers.toggle-status');
+        });
+
+        // Bank routes
+        Route::middleware('permission:manage-banks')->group(function () {
+            Route::get('hr/banks', [BankController::class, 'index'])->name('hr.banks.index');
+            Route::post('hr/banks', [BankController::class, 'store'])->middleware('permission:create-banks')->name('hr.banks.store');
+            Route::put('hr/banks/{bank}', [BankController::class, 'update'])->middleware('permission:edit-banks')->name('hr.banks.update');
+            Route::delete('hr/banks/{bank}', [BankController::class, 'destroy'])->middleware('permission:delete-banks')->name('hr.banks.destroy');
+            Route::put('hr/banks/{bank}/toggle-status', [BankController::class, 'toggleStatus'])->middleware('permission:toggle-status-banks')->name('hr.banks.toggle-status');
         });
 
         // Documenttype Routes

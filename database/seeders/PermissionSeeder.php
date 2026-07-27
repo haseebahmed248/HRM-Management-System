@@ -189,6 +189,16 @@ class PermissionSeeder extends Seeder
             ['name' => 'delete-departments', 'module' => 'departments', 'label' => 'Delete Departments', 'description' => 'Can delete departments'],
             ['name' => 'toggle-status-departments', 'module' => 'departments', 'label' => 'Toggle Status Departments', 'description' => 'Can toggle status of departments'],
 
+            // Bank management
+            ['name' => 'manage-banks', 'module' => 'banks', 'label' => 'Manage Banks', 'description' => 'Can manage banks'],
+            ['name' => 'manage-any-banks', 'module' => 'banks', 'label' => 'Manage All Banks', 'description' => 'Manage Any Banks'],
+            ['name' => 'manage-own-banks', 'module' => 'banks', 'label' => 'Manage Own Banks', 'description' => 'Manage Limited Banks that is created by own'],
+            ['name' => 'view-banks', 'module' => 'banks', 'label' => 'View Banks', 'description' => 'View Banks'],
+            ['name' => 'create-banks', 'module' => 'banks', 'label' => 'Create Banks', 'description' => 'Can create banks'],
+            ['name' => 'edit-banks', 'module' => 'banks', 'label' => 'Edit Banks', 'description' => 'Can edit banks'],
+            ['name' => 'delete-banks', 'module' => 'banks', 'label' => 'Delete Banks', 'description' => 'Can delete banks'],
+            ['name' => 'toggle-status-banks', 'module' => 'banks', 'label' => 'Toggle Status Banks', 'description' => 'Can toggle status of banks'],
+
             // Designation management
             ['name' => 'manage-designations', 'module' => 'designations', 'label' => 'Manage Designations', 'description' => 'Can manage designations'],
             ['name' => 'manage-any-designations', 'module' => 'designations', 'label' => 'Manage All Designations', 'description' => 'Manage Any Designations'],

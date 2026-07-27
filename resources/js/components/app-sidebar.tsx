@@ -187,6 +187,13 @@ export function AppSidebar() {
             });
         }
 
+        if (hasPermission(permissions, 'manage-banks')) {
+            hrChildren.push({
+                title: t('Banks'),
+                href: route('hr.banks.index')
+            });
+        }
+
         if (hasPermission(permissions, 'manage-document-types')) {
             hrChildren.push({
                 title: t('Document Types'),
