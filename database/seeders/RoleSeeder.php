@@ -103,6 +103,9 @@ class RoleSeeder extends Seeder
             'edit-banks',
             'delete-banks',
             'toggle-status-banks',
+            // Financial years / period management (company-managed; tax settings stay
+            // superadmin-only via a separate type check in ZambiaTaxSettingController).
+            'manage-payroll-settings',
             'manage-designations',
             'manage-any-designations',
             'manage-own-designations',
