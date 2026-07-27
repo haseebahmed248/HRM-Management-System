@@ -182,7 +182,12 @@ if (! function_exists('isLandingPageEnabled')) {
 if (! function_exists('isUserRegistrationEnabled')) {
     function isUserRegistrationEnabled()
     {
-        return getSetting('userRegistrationEnabled', true) === true || getSetting('userRegistrationEnabled', true) === '1';
+        // Default OFF: this is a vendor-onboarded B2B SaaS (Aromerc creates client
+        // companies via the superadmin panel). Public self-registration created
+        // every signup as type='company', flooding the Companies list with random
+        // accounts and inflating the user table. Registration is opt-in via the
+        // System Settings "User Registration" toggle only.
+        return getSetting('userRegistrationEnabled', false) === true || getSetting('userRegistrationEnabled', false) === '1';
     }
 }
 
@@ -936,7 +941,7 @@ if (! function_exists('defaultSettings')) {
             'defaultTimezone' => 'UTC',
             'emailVerification' => false,
             'landingPageEnabled' => true,
-            'userRegistrationEnabled' => true,
+            'userRegistrationEnabled' => false,
 
             'logoDark' => 'images/logos/Afripay HR Logo_page-0004.jpg',
             'logoLight' => 'images/logos/Afripay HR Logo_page-0001.jpg',
