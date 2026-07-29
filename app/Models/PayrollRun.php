@@ -116,7 +116,6 @@ class PayrollRun extends BaseModel
                 // If this run already has entries (e.g. unlocked run or partial run),
                 // just recalculate totals and complete rather than throwing an error.
                 if ($this->payrollEntries()->exists()) {
-                    $this->applySDL($zambiaService);
                     $this->calculateTotals();
                     $this->status = 'completed';
                     $this->save();
@@ -139,7 +138,6 @@ class PayrollRun extends BaseModel
                 $this->processEmployeePayroll($employeeRecord->user, $zambiaService, $employeeRecord);
             }
 
-            $this->applySDL($zambiaService);
             $this->calculateTotals();
 
             // Mark as completed as long as at least one entry was created/exists.
@@ -216,6 +214,7 @@ class PayrollRun extends BaseModel
         $exemptNapsa = $employeeRecord?->exempt_from_napsa ?? false;
         $exemptNhima = $employeeRecord?->exempt_from_nhima ?? false;
         $exemptPaye  = $employeeRecord?->exempt_from_paye ?? false;
+        $exemptSdl   = $employeeRecord?->exempt_from_sdl ?? false;
 
         // ── track-a/10: sum employee's pension contributions for PAYE relief.
         // Admins mark a salary component as a pension via calculation_type
@@ -274,7 +273,8 @@ class PayrollRun extends BaseModel
             $exemptNhima,
             $pensionContribution,
             $exemptPaye,
-            $nonTaxableEarnings
+            $nonTaxableEarnings,
+            $exemptSdl
         );
 
         // ────────────────────────────────────────────────────────────────────
@@ -344,6 +344,15 @@ class PayrollRun extends BaseModel
                 'type'   => 'zambia_nhima_employer',
             ];
         }
+        // SDL: employer levy (0.5% of this employee's gross), shown as an
+        // employer contribution and picked up by payslips + Zambia reports.
+        if (!$exemptSdl && ($zambia['sdl'] ?? 0) > 0) {
+            $employerContributions[] = [
+                'name'   => 'SDL (Employer)',
+                'amount' => $zambia['sdl'],
+                'type'   => 'zambia_sdl',
+            ];
+        }
 
         $earningsBreakdown = array_merge(
             [['name' => 'Basic Salary', 'amount' => $employeeSalary->basic_salary, 'type' => 'basic_salary']],
@@ -401,42 +410,6 @@ class PayrollRun extends BaseModel
             'deductions_breakdown'   => $deductionsBreakdown,
             'created_by'             => $this->created_by,
         ]);
-    }
-
-    // ─── SDL ─────────────────────────────────────────────────────────────────
-
-    private function applySDL(ZambiaPayrollService $zambiaService)
-    {
-        $sdlComponent = SalaryComponent::whereIn('created_by', getCompanyAndUsersId())
-            ->where('name', 'SDL - Skill Development Levy')
-            ->where('status', 'active')
-            ->first();
-
-        if (!$sdlComponent) return;
-
-        $allEntries = $this->payrollEntries()->get();
-
-        $nonExemptEntries = $allEntries->filter(function ($entry) {
-            $empRecord = Employee::where('user_id', $entry->employee_id)->first();
-            return !($empRecord?->exempt_from_sdl ?? false);
-        });
-
-        if ($nonExemptEntries->isEmpty()) return;
-
-        $totalGross    = $nonExemptEntries->sum('gross_pay');
-        $employeeCount = $nonExemptEntries->count();
-
-        if ($totalGross <= 0 || $employeeCount === 0) return;
-
-        $sdlAmount      = $zambiaService->calculateSDL($totalGross);
-        $sdlPerEmployee = round($sdlAmount / $employeeCount, 2);
-
-        foreach ($nonExemptEntries as $entry) {
-            $breakdown   = $entry->earnings_breakdown ?? [];
-            $breakdown[] = ['name' => 'SDL (Employer)', 'amount' => $sdlPerEmployee, 'type' => 'zambia_sdl'];
-            $entry->earnings_breakdown = $breakdown;
-            $entry->save();
-        }
     }
 
     // ─── Leave Data ──────────────────────────────────────────────────────────

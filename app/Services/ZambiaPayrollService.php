@@ -156,7 +156,8 @@ class ZambiaPayrollService
         bool $exemptNhima = false,
         float $pensionContribution = 0.0,
         bool $exemptPaye = false,
-        float $nonTaxableEarnings = 0.0
+        float $nonTaxableEarnings = 0.0,
+        bool $exemptSdl = false
     ): array {
         // track-a/10: forward pension contribution into PAYE so the existing
         // cap-and-subtract logic applies. PAYE is the only statutory tax
@@ -175,6 +176,11 @@ class ZambiaPayrollService
         $nhimaBase = $basicSalary > 0 ? $basicSalary : $grossPay;
         $nhima     = $this->calculateNHIMA($nhimaBase, $exemptNhima);
 
+        // SDL (Skills Development Levy) is an employer levy of 0.5% of gross,
+        // computed per employee so it distributes proportionally to each
+        // employee's pay. It is NOT deducted from the employee.
+        $sdl = $this->calculateSDL($grossPay, $exemptSdl);
+
         $totalDeductions = $paye + $napsa['employee'] + $nhima['employee'];
         $netPay          = $grossPay - $totalDeductions;
 
@@ -192,6 +198,7 @@ class ZambiaPayrollService
             'net_pay'             => round($netPay, 2),
             'napsa_employer'      => $napsa['employer'],
             'nhima_employer'      => $nhima['employer'],
+            'sdl'                 => round($sdl, 2),
             // track-a/10: surfaced for payslip transparency
             'pension_contribution' => round($pensionContribution, 2),
             'pension_relief'       => round($pensionRelief, 2),
