@@ -62,8 +62,12 @@ class EmployeeSalaryController extends Controller
 
                     $employeeModel = $employee->employee;
 
-                    // Fetch salary record once
-                    $employeeSalary = EmployeeSalary::where('employee_id', $employee->id)->first();
+                    // Fetch the ACTIVE salary record only. Item 7c keeps retired
+                    // (is_active = false) history rows, and this base-salary sync
+                    // must never touch them or it would overwrite the rate history.
+                    $employeeSalary = EmployeeSalary::where('employee_id', $employee->id)
+                        ->where('is_active', true)
+                        ->first();
 
                     // If salary record does not exist → create
                     if (!$employeeSalary) {
