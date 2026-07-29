@@ -214,6 +214,7 @@ class EmployeeSalaryController extends Controller
         $request->validate([
             'employee_id'  => 'required|exists:users,id',
             'basic_salary' => 'required|numeric|min:0',
+            'rate_type'    => 'nullable|in:monthly,hourly,daily,weekly,fortnightly',
             'components'   => 'nullable|array',
             'notes'        => 'nullable|string',
         ]);
@@ -224,8 +225,10 @@ class EmployeeSalaryController extends Controller
             return redirect()->back()->with('error', __('One or more salary components are invalid.'));
         }
 
-        // Check if employee already has salary
+        // Check if employee already has an ACTIVE salary (history records are kept
+        // as inactive rows, so only the active one blocks a new create).
         $exists = EmployeeSalary::where('employee_id', $request->employee_id)
+            ->where('is_active', true)
             ->whereIn('created_by', getCompanyAndUsersId())
             ->exists();
 
@@ -234,12 +237,14 @@ class EmployeeSalaryController extends Controller
         }
 
         EmployeeSalary::create([
-            'employee_id'  => $request->employee_id,
-            'basic_salary' => $request->basic_salary,
-            'components'   => $components,
-            'notes'        => $request->notes,
-            'created_by'   => creatorId(),
-            'is_active'    => true,
+            'employee_id'    => $request->employee_id,
+            'basic_salary'   => $request->basic_salary,
+            'rate_type'      => $request->input('rate_type', 'monthly'),
+            'effective_from' => now()->toDateString(),
+            'components'     => $components,
+            'notes'          => $request->notes,
+            'created_by'     => creatorId(),
+            'is_active'      => true,
         ]);
 
         return redirect()->back()->with('success', __('Employee salary created successfully.'));
@@ -258,6 +263,7 @@ class EmployeeSalaryController extends Controller
                 $validated = $request->validate([
                     'employee_id'  => 'required|exists:users,id',
                     'basic_salary' => 'required|numeric|min:0',
+                    'rate_type'    => 'nullable|in:monthly,hourly,daily,weekly,fortnightly',
                     'components'   => 'nullable|array',
                     'is_active'    => 'boolean',
                     'notes'        => 'nullable|string',
@@ -269,7 +275,32 @@ class EmployeeSalaryController extends Controller
                 }
                 $validated['components'] = $components;
 
-                $employeeSalary->update($validated);
+                $newRateType = $request->input('rate_type', $employeeSalary->rate_type ?? 'monthly');
+
+                // Item 7c: keep payroll history when the RATE or RATE TYPE changes.
+                // Instead of overwriting, we retire the current record (is_active =
+                // false, keeping it as history) and create a new active one with an
+                // effective_from date. Component/notes-only edits update in place.
+                $rateChanged = (float) $employeeSalary->basic_salary !== (float) $validated['basic_salary']
+                    || ($employeeSalary->rate_type ?? 'monthly') !== $newRateType;
+
+                if ($rateChanged) {
+                    $employeeSalary->update(['is_active' => false]);
+
+                    $employeeSalary = EmployeeSalary::create([
+                        'employee_id'    => $employeeSalary->employee_id,
+                        'basic_salary'   => $validated['basic_salary'],
+                        'rate_type'      => $newRateType,
+                        'effective_from' => now()->toDateString(),
+                        'components'     => $components,
+                        'notes'          => $validated['notes'] ?? null,
+                        'is_active'      => true,
+                        'created_by'     => creatorId(),
+                    ]);
+                } else {
+                    $validated['rate_type'] = $newRateType;
+                    $employeeSalary->update($validated);
+                }
 
                 // Sync basic salary back to employee profile
                 $employee = \App\Models\Employee::where('user_id', $employeeSalary->employee_id)->first();

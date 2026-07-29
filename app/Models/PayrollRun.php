@@ -177,22 +177,39 @@ class PayrollRun extends BaseModel
             return;
         }
 
+        // ── Working days in the period (needed before we compute base pay) ────
+        $startDate        = new \DateTime($this->pay_period_start);
+        $endDate          = new \DateTime($this->pay_period_end);
+        $totalWorkingDays = 0;
+        for ($date = clone $startDate; $date <= $endDate; $date->modify('+1 day')) {
+            if (in_array((int) $date->format('w'), $workingDaysIndices)) {
+                $totalWorkingDays++;
+            }
+        }
+
+        // ── Item 7: interpret the salary by its rate type ────────────────────
+        // 'monthly' leaves basic_salary unchanged (existing behaviour, so every
+        // current employee is unaffected). Other rate types turn the stored rate
+        // into the base pay for THIS period using the days worked. We set it on
+        // the in-memory salary object (never saved) so that components (% of
+        // basic), the basic line, the NHIMA base and unpaid-leave pro-rating all
+        // use the correct period figure.
+        $workingDaysPerWeek = max(1, count($workingDaysIndices));
+        $hoursPerDay        = (float) ($globalSettings['hours_per_day'] ?? 8);
+        if (($employeeSalary->rate_type ?? 'monthly') !== 'monthly') {
+            $employeeSalary->basic_salary = $employeeSalary->basePayForPeriod(
+                $totalWorkingDays,
+                $workingDaysPerWeek,
+                $hoursPerDay
+            );
+        }
+
         $salaryBreakdown = $employeeSalary->calculateAllComponents();
 
         $attendanceRecords = AttendanceRecord::where('employee_id', $employee->id)
             ->whereBetween('date', [$this->pay_period_start, $this->pay_period_end])
             ->orderBy('date')
             ->get();
-
-        $startDate        = new \DateTime($this->pay_period_start);
-        $endDate          = new \DateTime($this->pay_period_end);
-        $totalWorkingDays = 0;
-
-        for ($date = clone $startDate; $date <= $endDate; $date->modify('+1 day')) {
-            if (in_array((int) $date->format('w'), $workingDaysIndices)) {
-                $totalWorkingDays++;
-            }
-        }
 
         $presentDays    = $attendanceRecords->whereIn('status', ['present', 'holiday'])->count();
         $halfDays       = $attendanceRecords->where('status', 'half_day')->count();

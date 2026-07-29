@@ -66,6 +66,7 @@ export default function EmployeeSalaries() {
   // ── Form state ────────────────────────────────────────────────────────────
   const [formEmployeeId, setFormEmployeeId] = useState('');
   const [formBasicSalary, setFormBasicSalary] = useState('');
+  const [formRateType, setFormRateType] = useState('monthly');
   const [formIsActive, setFormIsActive] = useState(true);
   const [formNotes, setFormNotes] = useState('');
   const [formComponents, setFormComponents] = useState<ComponentEntry[]>([]);
@@ -138,6 +139,7 @@ export default function EmployeeSalaries() {
     if (item) {
       setFormEmployeeId(String(item.employee_id ?? ''));
       setFormBasicSalary(String(item.basic_salary ?? ''));
+      setFormRateType(item.rate_type ?? 'monthly');
       setFormIsActive(item.is_active ?? true);
       setFormNotes(item.notes ?? '');
 
@@ -155,6 +157,7 @@ export default function EmployeeSalaries() {
     } else {
       setFormEmployeeId('');
       setFormBasicSalary('');
+      setFormRateType('monthly');
       setFormIsActive(true);
       setFormNotes('');
       setFormComponents([]);
@@ -191,6 +194,7 @@ export default function EmployeeSalaries() {
     const payload = {
       employee_id: formEmployeeId,
       basic_salary: formBasicSalary,
+      rate_type: formRateType,
       is_active: formIsActive,
       notes: formNotes,
       components: formComponents.map(c => ({
@@ -460,14 +464,42 @@ export default function EmployeeSalaries() {
               )}
             </div>
 
-            {/* Basic Salary */}
+            {/* Rate Type (item 7) */}
             <div className="space-y-1">
-              <Label>{t('Basic Salary')} <span className="text-red-500">*</span></Label>
+              <Label>{t('Rate Type')} <span className="text-red-500">*</span></Label>
+              <Select value={formRateType} onValueChange={setFormRateType} disabled={formMode === 'view'}>
+                <SelectTrigger>
+                  <SelectValue placeholder={t('Select rate type')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="monthly">{t('Monthly Salary')}</SelectItem>
+                  <SelectItem value="hourly">{t('Hourly Rate')}</SelectItem>
+                  <SelectItem value="daily">{t('Daily Rate')}</SelectItem>
+                  <SelectItem value="weekly">{t('Weekly Rate')}</SelectItem>
+                  <SelectItem value="fortnightly">{t('Fortnightly Rate')}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500">
+                {formRateType === 'monthly'
+                  ? t('Paid a fixed amount per month.')
+                  : t('The amount below is the rate; payroll multiplies it by the units worked in the pay period.')}
+              </p>
+            </div>
+
+            {/* Basic Salary / Rate amount */}
+            <div className="space-y-1">
+              <Label>
+                {formRateType === 'monthly' ? t('Basic Salary (Monthly)')
+                  : formRateType === 'hourly' ? t('Hourly Rate')
+                  : formRateType === 'daily' ? t('Daily Rate')
+                  : formRateType === 'weekly' ? t('Weekly Rate')
+                  : t('Fortnightly Rate')} <span className="text-red-500">*</span>
+              </Label>
               <Input
                 type="number" min={0} step="0.01"
                 value={formBasicSalary}
                 onChange={e => setFormBasicSalary(e.target.value)}
-                placeholder={t('Enter basic salary amount')}
+                placeholder={t('Enter amount')}
                 disabled={formMode === 'view'}
                 required
               />

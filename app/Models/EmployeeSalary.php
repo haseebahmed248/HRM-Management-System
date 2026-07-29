@@ -12,6 +12,8 @@ class EmployeeSalary extends BaseModel
     protected $fillable = [
         'employee_id',
         'basic_salary',
+        'rate_type',
+        'effective_from',
         'components',
         'is_active',
         'calculation_status',
@@ -23,7 +25,32 @@ class EmployeeSalary extends BaseModel
         'basic_salary' => 'decimal:2',
         'components' => 'array',
         'is_active' => 'boolean',
+        'effective_from' => 'date',
     ];
+
+    /**
+     * Item 7 - convert the stored rate into the base pay for a given pay period.
+     * 'monthly' returns basic_salary unchanged (existing behaviour). Other rate
+     * types multiply the rate by the units worked in the period.
+     *
+     * @param  int    $workingDays        scheduled working days in the period
+     * @param  int    $workingDaysPerWeek working days in a normal week (e.g. 5)
+     * @param  float  $hoursPerDay        contracted hours per day (default 8)
+     */
+    public function basePayForPeriod(int $workingDays, int $workingDaysPerWeek, float $hoursPerDay = 8.0): float
+    {
+        $rate = (float) $this->basic_salary;
+        $type = $this->rate_type ?? 'monthly';
+        $perWeek = $workingDaysPerWeek > 0 ? $workingDaysPerWeek : 5;
+
+        return match ($type) {
+            'hourly'      => round($rate * $workingDays * $hoursPerDay, 2),
+            'daily'       => round($rate * $workingDays, 2),
+            'weekly'      => round($rate * ($workingDays / $perWeek), 2),
+            'fortnightly' => round($rate * ($workingDays / $perWeek / 2), 2),
+            default       => round($rate, 2), // monthly - unchanged
+        };
+    }
 
     /**
      * Get the employee.
