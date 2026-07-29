@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PageTemplate } from '@/components/page-template';
-import { usePage } from '@inertiajs/react';
-import { Download, FileText, Filter } from 'lucide-react';
+import { usePage, router } from '@inertiajs/react';
+import { Download, FileText, Filter, History } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@/components/custom-toast';
 import { Button } from '@/components/ui/button';
@@ -202,6 +202,11 @@ export default function ZambiaReports() {
             description: t('Overall totals — gross pay, all deductions, net pay and employer cost.'),
         },
         {
+            key:         'hr.zambia-reports.payroll-journal',
+            title:       t('Payroll Journal'),
+            description: t('Per-employee journal: gross, PAYE, NAPSA, NHIMA, other deductions, net pay and employer contributions, with totals.'),
+        },
+        {
             key:         'hr.zambia-reports.payroll-detailed',
             title:       t('Payroll Detailed Report'),
             description: t('Full per-employee breakdown: basic, earnings, PAYE, NAPSA, NHIMA and net pay.'),
@@ -269,6 +274,12 @@ export default function ZambiaReports() {
             title={t('Zambia Compliance Reports')}
             url="/hr/zambia-reports"
             breadcrumbs={breadcrumbs}
+            actions={[{
+                label: t('Audit Trail'),
+                icon: <History className="h-4 w-4 mr-2" />,
+                variant: 'outline',
+                onClick: () => router.get(route('hr.audit-trail.index')),
+            }]}
             noPadding
         >
             <div className="p-6 space-y-8">

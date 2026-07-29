@@ -9,6 +9,55 @@ class Employee extends Model
 {
     use HasFactory;
 
+    /**
+     * Item 8 - Audit Trail. Record employee creations, changes and deletions to
+     * the audit log automatically, whatever code path makes the change.
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::created(function (Employee $employee) {
+            AuditLog::record('employee', 'created', static::auditLabel($employee), 'Employee created', null, $employee);
+        });
+
+        static::updated(function (Employee $employee) {
+            // base_salary is kept in sync internally from the salary screen, and
+            // timestamps are noise - don't audit those on their own.
+            $ignore  = ['updated_at', 'created_at', 'base_salary'];
+            $changed = array_diff_key($employee->getChanges(), array_flip($ignore));
+            if (empty($changed)) {
+                return;
+            }
+            $diff = [];
+            foreach ($changed as $field => $new) {
+                $diff[$field] = ['old' => $employee->getOriginal($field), 'new' => $new];
+            }
+            AuditLog::record(
+                'employee',
+                'updated',
+                static::auditLabel($employee),
+                'Employee updated: ' . implode(', ', array_keys($diff)),
+                $diff,
+                $employee
+            );
+        });
+
+        static::deleted(function (Employee $employee) {
+            AuditLog::record('employee_deleted', 'deleted', static::auditLabel($employee), 'Employee deleted', null, $employee);
+        });
+    }
+
+    /** Human label for the audit trail: "First Last (EMP001)". */
+    protected static function auditLabel(Employee $employee): string
+    {
+        $name = trim(($employee->first_name ?? '') . ' ' . ($employee->last_name ?? ''));
+        if ($name === '') {
+            $name = optional(User::find($employee->user_id))->name ?? ('Employee #' . $employee->id);
+        }
+        return $name . ($employee->employee_id ? " ({$employee->employee_id})" : '');
+    }
+
    protected $fillable = [
     'user_id',
     'employee_id',

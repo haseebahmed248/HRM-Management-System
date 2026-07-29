@@ -40,6 +40,8 @@ class SystemSettingsController extends Controller
                 updateSetting($key, $value);
             }
 
+            \App\Models\AuditLog::record('system', 'system_change', 'System Settings', 'System settings updated (' . implode(', ', array_keys($validated)) . ')');
+
             return redirect()->back()->with('success', __('System settings updated successfully.'));
         } catch (\Exception $e) {
             return redirect()->back()->with('error', __('Failed to update system settings: :error', ['error' => $e->getMessage()]));

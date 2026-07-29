@@ -70,6 +70,8 @@ class ZambiaTaxSettingController extends Controller
             );
         }
 
+        \App\Models\AuditLog::record('system', 'system_change', 'Zambia Tax Settings', 'Zambia tax settings updated (PAYE bands / NAPSA / NHIMA / SDL).');
+
         return redirect()->back()->with('success', __('Zambia tax settings updated successfully.'));
     }
 }

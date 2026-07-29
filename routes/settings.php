@@ -151,6 +151,12 @@ Route::post('settings/zambia-tax/update',
     Route::middleware('permission:manage-payroll-runs')->group(function () {
         Route::get('hr/zambia-reports', [\App\Http\Controllers\ZambiaReportController::class, 'index'])
             ->name('hr.zambia-reports.index');
+        // Item 8 — Audit Trail Report (employee changes, deletions, system changes)
+        Route::get('hr/audit-trail', [\App\Http\Controllers\AuditTrailController::class, 'index'])
+            ->name('hr.audit-trail.index');
+        // Item 8 — Payroll Journal Report
+        Route::get('hr/zambia-reports/payroll-journal', [\App\Http\Controllers\ZambiaReportController::class, 'payrollJournal'])
+            ->name('hr.zambia-reports.payroll-journal');
         Route::get('hr/zambia-reports/paye-p11', [\App\Http\Controllers\ZambiaReportController::class, 'payeP11'])
             ->name('hr.zambia-reports.paye-p11');
         Route::get('hr/zambia-reports/napsa-schedule', [\App\Http\Controllers\ZambiaReportController::class, 'napsaSchedule'])

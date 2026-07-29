@@ -401,6 +401,60 @@ class ZambiaReportController extends Controller
         return $this->exportSections($format, 'Payroll_Summary_' . $run->pay_period_start->format('M_Y'), $sections);
     }
 
+    // ─── Payroll Journal Report (item 8) ────────────────────────────────────
+    // Per-employee journal for a run: gross, statutory deductions, other
+    // deductions, net pay, and employer contributions, with a totals row.
+    public function payrollJournal(Request $request)
+    {
+        $request->validate(['payroll_run_id' => 'required|exists:payroll_runs,id']);
+
+        $run     = $this->getPayrollRun($request->payroll_run_id);
+        $entries = $this->getFilteredEntries($request->payroll_run_id, $request);
+        $format  = $request->input('format', 'csv');
+        $fmt     = fn ($v) => number_format($v, 2, '.', '');
+
+        $rows = [];
+        $tot  = ['gross' => 0, 'paye' => 0, 'napsaEmp' => 0, 'nhimaEmp' => 0, 'other' => 0, 'net' => 0, 'napsaEmr' => 0, 'nhimaEmr' => 0, 'sdl' => 0];
+
+        foreach ($entries as $e) {
+            $gross    = (float) $e->gross_pay;
+            $paye     = $this->getDeductionAmount($e, 'zambia_paye');
+            $napsaEmp = $this->getDeductionAmount($e, 'zambia_napsa_employee');
+            $nhimaEmp = $this->getDeductionAmount($e, 'zambia_nhima_employee');
+            $napsaEmr = $this->getEarningAmount($e, 'zambia_napsa_employer');
+            $nhimaEmr = $this->getEarningAmount($e, 'zambia_nhima_employer');
+            $sdl      = $this->getEarningAmount($e, 'zambia_sdl');
+            $ded      = (float) $e->total_deductions;
+            $net      = (float) $e->net_pay;
+            $other    = max(0, $ded - $paye - $napsaEmp - $nhimaEmp);
+
+            $rows[] = [
+                $e->employee_name,
+                $fmt($gross), $fmt($paye), $fmt($napsaEmp), $fmt($nhimaEmp), $fmt($other), $fmt($net),
+                $fmt($napsaEmr), $fmt($nhimaEmr), $fmt($sdl),
+            ];
+
+            $tot['gross'] += $gross; $tot['paye'] += $paye; $tot['napsaEmp'] += $napsaEmp;
+            $tot['nhimaEmp'] += $nhimaEmp; $tot['other'] += $other; $tot['net'] += $net;
+            $tot['napsaEmr'] += $napsaEmr; $tot['nhimaEmr'] += $nhimaEmr; $tot['sdl'] += $sdl;
+        }
+
+        $rows[] = ['TOTAL', $fmt($tot['gross']), $fmt($tot['paye']), $fmt($tot['napsaEmp']), $fmt($tot['nhimaEmp']), $fmt($tot['other']), $fmt($tot['net']), $fmt($tot['napsaEmr']), $fmt($tot['nhimaEmr']), $fmt($tot['sdl'])];
+
+        $sections = [
+            ['type' => 'title', 'content' => 'Payroll Journal — ' . $run->pay_period_start->format('F Y')],
+            ['type' => 'info', 'rows' => [
+                ['Pay Period', $run->pay_period_start->format('d M Y') . ' – ' . $run->pay_period_end->format('d M Y')],
+                ['Pay Date', $run->pay_date->format('d M Y')],
+                ['Total Employees', $entries->count()],
+            ]],
+            ['type' => 'blank'],
+            ['type' => 'table', 'title' => 'Payroll Journal', 'headers' => ['Employee', 'Gross', 'PAYE', 'NAPSA (Emp)', 'NHIMA (Emp)', 'Other Ded.', 'Net Pay', 'NAPSA (Emr)', 'NHIMA (Emr)', 'SDL'], 'rows' => $rows],
+        ];
+
+        return $this->exportSections($format, 'Payroll_Journal_' . $run->pay_period_start->format('M_Y'), $sections);
+    }
+
     // ─── Report 6 — Employee List Report ────────────────────────────────────
 
     public function employeeList(Request $request)
