@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 export default function EmployeeShow() {
     const { t } = useTranslation();
-    const { auth, employee, flash } = usePage().props as any;
+    const { auth, employee, rateDetails, flash } = usePage().props as any;
     const permissions = auth?.permissions || [];
     const getInitials = useInitials();
 
@@ -264,11 +264,12 @@ export default function EmployeeShow() {
                 {/* Employee Details Tabs */}
                 <div className="xl:col-span-3">
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                        <TabsList className="mb-4 grid grid-cols-6">
+                        <TabsList className="mb-4 grid grid-cols-7">
                             <TabsTrigger value="basic_info">{t('Basic Info')}</TabsTrigger>
                             <TabsTrigger value="employment">{t('Employment')}</TabsTrigger>
                             <TabsTrigger value="contact">{t('Contact')}</TabsTrigger>
                             <TabsTrigger value="banking">{t('Banking')}</TabsTrigger>
+                            <TabsTrigger value="rate_details">{t('Rate Details')}</TabsTrigger>
                             {(hasPermission(permissions, 'download-joining-letter') ||
                                 hasPermission(permissions, 'download-experience-certificate') ||
                                 hasPermission(permissions, 'download-noc-certificate')) && (
@@ -756,6 +757,74 @@ export default function EmployeeShow() {
                                             </div>
                                         </div>
                                     </div>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+
+                        {/* Rate Details Tab (item 9) */}
+                        <TabsContent value="rate_details">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('Rate Details')}</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {!rateDetails ? (
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">{t('No salary has been configured for this employee yet.')}</p>
+                                    ) : (
+                                        <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                                            {/* Rate Values */}
+                                            <div>
+                                                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{t('Rate Values')}</h3>
+                                                <dl className="space-y-2">
+                                                    {[
+                                                        [t('Hourly Rate'), rateDetails.hourly_rate],
+                                                        [t('Daily Rate'), rateDetails.daily_rate],
+                                                        [t('Weekly Rate'), rateDetails.weekly_rate],
+                                                        [t('Monthly Rate'), rateDetails.monthly_rate],
+                                                        [t('Leave Pay Rate (Daily)'), rateDetails.leave_pay_rate],
+                                                    ].map(([label, val]: any) => (
+                                                        <div key={label} className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
+                                                            <dt className="text-sm text-gray-500 dark:text-gray-400">{label}</dt>
+                                                            <dd className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                                                ZMW {Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            </dd>
+                                                        </div>
+                                                    ))}
+                                                </dl>
+                                            </div>
+                                            {/* Base Values */}
+                                            <div>
+                                                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{t('Base Values')}</h3>
+                                                <dl className="space-y-2">
+                                                    <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
+                                                        <dt className="text-sm text-gray-500 dark:text-gray-400">{t('Rate Type')}</dt>
+                                                        <dd className="text-sm font-semibold capitalize text-gray-900 dark:text-gray-100">{rateDetails.rate_type}</dd>
+                                                    </div>
+                                                    <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
+                                                        <dt className="text-sm text-gray-500 dark:text-gray-400">{t('Notional Pay (Monthly)')}</dt>
+                                                        <dd className="text-sm font-semibold text-gray-900 dark:text-gray-100">ZMW {Number(rateDetails.notional_pay).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</dd>
+                                                    </div>
+                                                    <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
+                                                        <dt className="text-sm text-gray-500 dark:text-gray-400">{t('Previous Notional Pay')}</dt>
+                                                        <dd className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                                            {rateDetails.prev_notional_pay != null ? 'ZMW ' + Number(rateDetails.prev_notional_pay).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                                                        </dd>
+                                                    </div>
+                                                    <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
+                                                        <dt className="text-sm text-gray-500 dark:text-gray-400">{t('Last Increase Date')}</dt>
+                                                        <dd className="text-sm font-semibold text-gray-900 dark:text-gray-100">{rateDetails.effective_from || '—'}</dd>
+                                                    </div>
+                                                    <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
+                                                        <dt className="text-sm text-gray-500 dark:text-gray-400">{t('Periods Worked')}</dt>
+                                                        <dd className="text-sm font-semibold text-gray-900 dark:text-gray-100">{rateDetails.periods_worked ?? 0}</dd>
+                                                    </div>
+                                                </dl>
+                                                <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">
+                                                    {t('Rates are derived from the configured rate and the company work schedule (hours/day, days/week, days/month).')}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         </TabsContent>

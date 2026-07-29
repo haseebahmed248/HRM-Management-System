@@ -13,6 +13,8 @@ use App\Models\StaffTier;
 use App\Models\DocumentType;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
+use App\Models\EmployeeSalary;
+use App\Models\PayrollEntry;
 use App\Models\ExperienceCertificateTemplate;
 use App\Models\JoiningLetterTemplate;
 use App\Models\NocTemplate;
@@ -421,8 +423,35 @@ class EmployeeController extends Controller
 
             $user->avatar = check_file($user->avatar) ? get_file($user->avatar) : get_file('avatars/avatar.png');
 
+            // Item 9 - rate details for display (derived from the active salary +
+            // item 7 rate type). Includes previous notional pay from the salary
+            // history (item 7c) and how many payroll periods the employee has run.
+            $rateDetails  = null;
+            $activeSalary = EmployeeSalary::getActiveSalary($employee->user_id);
+            if ($activeSalary) {
+                $s   = settings();
+                $hpd = (float) ($s['hours_per_day'] ?? 8);
+                $wd  = json_decode($s['working_days'] ?? '[]', true);
+                $dpw = is_array($wd) && count($wd) ? count($wd) : 5;
+                $dpm = (int) ($s['working_days_per_month'] ?? 22);
+
+                $rateDetails = $activeSalary->rateBreakdown($hpd, $dpw, $dpm);
+                $rateDetails['effective_from'] = optional($activeSalary->effective_from)->toDateString();
+
+                $prev = EmployeeSalary::where('employee_id', $employee->user_id)
+                    ->where('is_active', false)
+                    ->orderByDesc('id')
+                    ->first();
+                $rateDetails['prev_notional_pay'] = $prev ? $prev->rateBreakdown($hpd, $dpw, $dpm)['notional_pay'] : null;
+
+                $rateDetails['periods_worked'] = PayrollEntry::where('employee_id', $employee->user_id)
+                    ->distinct()
+                    ->count('payroll_run_id');
+            }
+
             return Inertia::render('hr/employees/show', [
-                'employee' => $user,
+                'employee'    => $user,
+                'rateDetails' => $rateDetails,
             ]);
         } else {
             return redirect()->back()->with('error', __('Permission Denied.'));

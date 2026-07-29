@@ -29,6 +29,44 @@ class EmployeeSalary extends BaseModel
     ];
 
     /**
+     * Item 9 - Employee rate details. Derives every equivalent rate (hourly,
+     * daily, weekly, monthly) from the stored rate + rate type, plus the monthly
+     * notional pay and the leave pay rate (paid at the daily rate). Uses the
+     * company's hours/day, working days/week and working days/month config.
+     */
+    public function rateBreakdown(float $hoursPerDay = 8.0, int $daysPerWeek = 5, int $daysPerMonth = 22): array
+    {
+        $rate       = (float) $this->basic_salary;
+        $type       = $this->rate_type ?? 'monthly';
+        $perWeek    = max(1, $daysPerWeek);
+        $perMonth   = max(1, $daysPerMonth);
+
+        // Convert the stored rate to a monthly-equivalent (notional) figure first.
+        $monthly = match ($type) {
+            'hourly'      => $rate * $hoursPerDay * $perMonth,
+            'daily'       => $rate * $perMonth,
+            'weekly'      => $rate * ($perMonth / $perWeek),
+            'fortnightly' => $rate * ($perMonth / $perWeek / 2),
+            default       => $rate, // monthly
+        };
+
+        $daily  = $monthly / $perMonth;
+        $hourly = $hoursPerDay > 0 ? $daily / $hoursPerDay : 0;
+        $weekly = $daily * $perWeek;
+
+        return [
+            'rate_type'        => $type,
+            'configured_rate'  => round($rate, 4),
+            'hourly_rate'      => round($hourly, 4),
+            'daily_rate'       => round($daily, 4),
+            'weekly_rate'      => round($weekly, 4),
+            'monthly_rate'     => round($monthly, 2),
+            'notional_pay'     => round($monthly, 2),      // monthly-equivalent wage
+            'leave_pay_rate'   => round($daily, 2),        // leave paid at the daily rate
+        ];
+    }
+
+    /**
      * Item 7 - convert the stored rate into the base pay for a given pay period.
      * 'monthly' returns basic_salary unchanged (existing behaviour). Other rate
      * types multiply the rate by the units worked in the period.
