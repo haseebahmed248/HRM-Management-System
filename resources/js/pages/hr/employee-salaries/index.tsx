@@ -27,11 +27,20 @@ interface ComponentEntry {
 interface SalaryComponent {
   id: number;
   name: string;
-  type: 'earning' | 'deduction';
-  calculation_type: 'fixed' | 'percentage';
+  type: 'income' | 'benefit' | 'deduction_tax_deductible' | 'deduction_non_tax' | 'company_contribution' | 'leave';
+  type_label: string;
+  is_earning: boolean;
+  is_deduction: boolean;
+  is_employer_contribution: boolean;
+  calculation_type: 'fixed' | 'percentage' | 'zambia_pension';
   default_amount: number | null;
   percentage_of_basic: number | null;
   status?: 'active' | 'inactive';
+}
+
+interface FlashMessages {
+  success?: string;
+  error?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -209,8 +218,9 @@ export default function EmployeeSalaries() {
         onSuccess: page => {
           setIsFormModalOpen(false);
           toast.dismiss();
-          if (page.props.flash?.success) toast.success(t(page.props.flash.success));
-          else if (page.props.flash?.error) toast.error(t(page.props.flash.error));
+          const flash = page.props.flash as FlashMessages | undefined;
+          if (flash?.success) toast.success(t(flash.success));
+          else if (flash?.error) toast.error(t(flash.error));
         },
         onError: errors => {
           toast.dismiss();
@@ -223,8 +233,9 @@ export default function EmployeeSalaries() {
         onSuccess: page => {
           setIsFormModalOpen(false);
           toast.dismiss();
-          if (page.props.flash?.success) toast.success(t(page.props.flash.success));
-          else if (page.props.flash?.error) toast.error(t(page.props.flash.error));
+          const flash = page.props.flash as FlashMessages | undefined;
+          if (flash?.success) toast.success(t(flash.success));
+          else if (flash?.error) toast.error(t(flash.error));
         },
         onError: errors => {
           toast.dismiss();
@@ -251,8 +262,9 @@ export default function EmployeeSalaries() {
       onSuccess: page => {
         setIsDeleteModalOpen(false);
         toast.dismiss();
-        if (page.props.flash?.success) toast.success(t(page.props.flash.success));
-        else if (page.props.flash?.error) toast.error(t(page.props.flash.error));
+        const flash = page.props.flash as FlashMessages | undefined;
+        if (flash?.success) toast.success(t(flash.success));
+        else if (flash?.error) toast.error(t(flash.error));
       },
       onError: () => { toast.dismiss(); toast.error(t('Failed to delete employee salary')); },
     });
@@ -263,8 +275,9 @@ export default function EmployeeSalaries() {
     router.put(route('hr.employee-salaries.toggle-status', salary.id), {}, {
       onSuccess: page => {
         toast.dismiss();
-        if (page.props.flash?.success) toast.success(t(page.props.flash.success));
-        else if (page.props.flash?.error) toast.error(t(page.props.flash.error));
+        const flash = page.props.flash as FlashMessages | undefined;
+        if (flash?.success) toast.success(t(flash.success));
+        else if (flash?.error) toast.error(t(flash.error));
       },
       onError: () => { toast.dismiss(); toast.error(t('Failed to update status')); },
     });
@@ -351,6 +364,7 @@ export default function EmployeeSalaries() {
   return (
     <PageTemplate
       title={t('Employee Salaries')}
+      description={t('Assign salary rates and payroll components to employees.')}
       url="/hr/employee-salaries"
       actions={[]}
       breadcrumbs={[
@@ -417,7 +431,6 @@ export default function EmployeeSalaries() {
           permissions={permissions}
           entityPermissions={{
             view: 'view-employee-salaries',
-            create: 'create-employee-salaries',
             edit: 'edit-employee-salaries',
             delete: 'delete-employee-salaries',
           }}
@@ -596,28 +609,24 @@ export default function EmployeeSalaries() {
                   >
                     <option value="">{t('— Select a component to add —')}</option>
                     {(() => {
-                      const earnings   = availableComponents.filter(sc => sc.type === 'earning');
-                      const deductions = availableComponents.filter(sc => sc.type === 'deduction');
-                      const bothExist  = earnings.length > 0 && deductions.length > 0;
+                      const earnings = availableComponents.filter(sc => sc.is_earning);
+                      const deductions = availableComponents.filter(sc => sc.is_deduction);
+                      const employerContributions = availableComponents.filter(sc => sc.is_employer_contribution);
                       const renderOptions = (list: SalaryComponent[]) =>
                         list.map(sc => (
                           <option key={sc.id} value={String(sc.id)}>
-                            {sc.type === 'earning' ? '▲' : '▼'} {sc.name} ({componentDefaultLabel(sc)})
+                            {sc.name} - {sc.type_label} ({componentDefaultLabel(sc)})
                           </option>
                         ));
-                      if (bothExist) {
-                        return (
-                          <>
-                            <optgroup label={t('── Earnings')}>
-                              {renderOptions(earnings)}
-                            </optgroup>
-                            <optgroup label={t('── Deductions')}>
-                              {renderOptions(deductions)}
-                            </optgroup>
-                          </>
-                        );
-                      }
-                      return renderOptions(availableComponents);
+                      return (
+                        <>
+                          {earnings.length > 0 && <optgroup label={t('Earnings')}>{renderOptions(earnings)}</optgroup>}
+                          {deductions.length > 0 && <optgroup label={t('Deductions')}>{renderOptions(deductions)}</optgroup>}
+                          {employerContributions.length > 0 && (
+                            <optgroup label={t('Employer Contributions')}>{renderOptions(employerContributions)}</optgroup>
+                          )}
+                        </>
+                      );
                     })()}
                   </select>
                 )

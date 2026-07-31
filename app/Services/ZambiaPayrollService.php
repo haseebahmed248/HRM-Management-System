@@ -157,7 +157,8 @@ class ZambiaPayrollService
         float $pensionContribution = 0.0,
         bool $exemptPaye = false,
         float $nonTaxableEarnings = 0.0,
-        bool $exemptSdl = false
+        bool $exemptSdl = false,
+        float $taxDeductibleDeductions = 0.0
     ): array {
         // track-a/10: forward pension contribution into PAYE so the existing
         // cap-and-subtract logic applies. PAYE is the only statutory tax
@@ -168,7 +169,9 @@ class ZambiaPayrollService
         // are excluded from the PAYE base only: the employee still receives them
         // in gross and net pay, and NAPSA / NHIMA are unaffected (they use raw
         // gross / basic). This is the standard treatment of a tax-free allowance.
-        $payeGross = max(0.0, $grossPay - $nonTaxableEarnings);
+        // Other approved pre-tax deductions reduce PAYE gross in full. Zambia
+        // pension remains a separate argument so its existing relief cap still applies.
+        $payeGross = max(0.0, $grossPay - $nonTaxableEarnings - $taxDeductibleDeductions);
         $paye  = $exemptPaye ? 0.0 : $this->calculatePAYE($payeGross, $pensionContribution);
         $napsa = $this->calculateNAPSA($grossPay, $exemptNapsa);
 

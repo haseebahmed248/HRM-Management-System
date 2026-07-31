@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\EmployeeSalary;
 use App\Models\PayrollEntry;
 use App\Models\SalaryComponent;
+use App\Support\ComponentType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
@@ -67,6 +69,7 @@ class SalaryComponentController extends Controller
 
             return Inertia::render('hr/salary-components/index', [
                 'salaryComponents' => $salaryComponents,
+                'componentTypes' => ComponentType::options(),
                 'filters' => $request->all(['search', 'type', 'calculation_type', 'status', 'sort_field', 'sort_direction', 'per_page']),
             ]);
         } else {
@@ -76,10 +79,12 @@ class SalaryComponentController extends Controller
 
     public function store(Request $request)
     {
+        $this->normalizeComponentType($request);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'type' => 'required|in:earning,deduction',
+            'type' => ['required', Rule::enum(ComponentType::class)],
             // track-a/10: `zambia_pension` marks a deduction component as
             // qualifying for PAYE relief (capped per Zambia Tax Settings).
             // It behaves like `fixed` for amount purposes — uses default_amount.
@@ -132,10 +137,12 @@ class SalaryComponentController extends Controller
 
         if ($salaryComponent) {
             try {
+                $this->normalizeComponentType($request);
+
                 $validated = $request->validate([
                     'name' => 'required|string|max:255',
                     'description' => 'nullable|string',
-                    'type' => 'required|in:earning,deduction',
+                    'type' => ['required', Rule::enum(ComponentType::class)],
                     // track-a/10: accept zambia_pension (behaves like fixed for amount)
                     'calculation_type' => 'required|in:fixed,percentage,zambia_pension',
                     // Allow blank/zero for fixed components (e.g. placeholder fixed
@@ -274,10 +281,12 @@ class SalaryComponentController extends Controller
 
             // Sample rows showing each calculation_type
             $samples = [
-                ['Housing Allowance',  'Monthly housing stipend', 'earning',   'fixed',          '1500', '',   'yes', 'no', 'active'],
-                ['Performance Bonus',  '10% of basic salary',     'earning',   'percentage',     '',     '10', 'yes', 'no', 'active'],
-                ['Pension Contribution','Employee NAPSA top-up',  'deduction', 'zambia_pension', '500',  '',   'no',  'no', 'active'],
-                ['Loan Repayment',     'Monthly loan deduction',  'deduction', 'fixed',          '750',  '',   'no',  'no', 'active'],
+                ['Housing Allowance',  'Monthly housing stipend', 'income',                  'fixed',          '1500', '',   'yes', 'no', 'active'],
+                ['Company Vehicle',    'Taxable benefit in kind', 'benefit',                 'percentage',     '',     '10', 'yes', 'no', 'active'],
+                ['Pension Contribution','Approved pension relief','deduction_tax_deductible','zambia_pension', '500',  '',   'no',  'no', 'active'],
+                ['Loan Repayment',     'Monthly loan deduction',  'deduction_non_tax',       'fixed',          '750',  '',   'no',  'no', 'active'],
+                ['Medical Cover',      'Employer-paid cover',     'company_contribution',    'fixed',          '350',  '',   'no',  'no', 'active'],
+                ['Leave Allowance',    'Taxable leave allowance', 'leave',                   'fixed',          '250',  '',   'yes', 'no', 'active'],
             ];
             foreach ($samples as $rowIdx => $row) {
                 foreach ($row as $colIdx => $val) {
@@ -288,7 +297,7 @@ class SalaryComponentController extends Controller
 
             // Hint row
             $hintRow = count($samples) + 2;
-            $sheet->setCellValue('A' . $hintRow, 'Allowed Type: earning | deduction');
+            $sheet->setCellValue('A' . $hintRow, 'Allowed Type: ' . implode(' | ', ComponentType::values()));
             $sheet->setCellValue('D' . $hintRow, 'Allowed Calculation Type: fixed | percentage | zambia_pension');
             $sheet->getStyle('A' . $hintRow . ':' . $lastCol . $hintRow)->applyFromArray([
                 'font' => ['italic' => true, 'color' => ['rgb' => '856404']],
@@ -390,16 +399,17 @@ class SalaryComponentController extends Controller
                 $name = trim((string) ($row['Name'] ?? $row['name'] ?? ''));
                 if ($name === '') { $skipped++; continue; }
 
-                $type = strtolower(trim((string) ($row['Type'] ?? $row['type'] ?? 'earning')));
-                if (! in_array($type, ['earning', 'deduction'], true)) {
-                    $errors[] = __('Row :n: invalid Type :t', ['n' => $idx + 1, 't' => $type]);
+                $calc = strtolower(str_replace([' ', '-'], '_', trim((string) ($row['Calculation Type'] ?? $row['calculation_type'] ?? 'fixed'))));
+                if (! in_array($calc, ['fixed', 'percentage', 'zambia_pension'], true)) {
+                    $errors[] = __('Row :n: invalid Calculation Type :c', ['n' => $idx + 1, 'c' => $calc]);
                     $skipped++;
                     continue;
                 }
 
-                $calc = strtolower(str_replace([' ', '-'], '_', trim((string) ($row['Calculation Type'] ?? $row['calculation_type'] ?? 'fixed'))));
-                if (! in_array($calc, ['fixed', 'percentage', 'zambia_pension'], true)) {
-                    $errors[] = __('Row :n: invalid Calculation Type :c', ['n' => $idx + 1, 'c' => $calc]);
+                $rawType = strtolower(trim((string) ($row['Type'] ?? $row['type'] ?? ComponentType::Income->value)));
+                $componentType = ComponentType::normalizeInput($rawType, $calc);
+                if (! $componentType) {
+                    $errors[] = __('Row :n: invalid Type :t', ['n' => $idx + 1, 't' => $rawType]);
                     $skipped++;
                     continue;
                 }
@@ -412,7 +422,7 @@ class SalaryComponentController extends Controller
                 $payload = [
                     'name'                => $name,
                     'description'         => $row['Description'] ?? $row['description'] ?? null,
-                    'type'                => $type,
+                    'type'                => $componentType->value,
                     'calculation_type'    => $calc,
                     'default_amount'      => in_array($calc, ['fixed', 'zambia_pension'], true) ? (float) ($defaultAmount ?: 0) : 0,
                     'percentage_of_basic' => $calc === 'percentage' ? (float) ($percentage ?: 0) : null,
@@ -443,5 +453,17 @@ class SalaryComponentController extends Controller
             $msg .= ' ' . implode(' | ', array_slice($errors, 0, 3));
         }
         return redirect()->back()->with($imported > 0 ? 'success' : 'error', $msg);
+    }
+
+    private function normalizeComponentType(Request $request): void
+    {
+        $type = ComponentType::normalizeInput(
+            $request->input('type'),
+            $request->input('calculation_type')
+        );
+
+        if ($type) {
+            $request->merge(['type' => $type->value]);
+        }
     }
 }

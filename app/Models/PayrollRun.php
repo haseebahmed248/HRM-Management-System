@@ -242,52 +242,24 @@ class PayrollRun extends BaseModel
         $exemptPaye  = $employeeRecord?->exempt_from_paye ?? false;
         $exemptSdl   = $employeeRecord?->exempt_from_sdl ?? false;
 
-        // ── track-a/10: sum employee's pension contributions for PAYE relief.
-        // Admins mark a salary component as a pension via calculation_type
-        // = 'zambia_pension'. Match those names against the breakdown and
-        // sum their amounts. Pension components are still surfaced as
-        // regular deductions on the payslip — they just additionally feed
-        // into the PAYE-taxable-income calc inside the Zambia service.
-        $pensionComponentNames = \DB::table('salary_components')
-            ->whereIn('id', array_column($employeeSalary->getNormalisedComponents(), 'id'))
-            ->where('calculation_type', 'zambia_pension')
-            ->where('type', 'deduction')
-            ->where('status', 'active')
-            ->whereIn('created_by', getCompanyAndUsersId())
-            ->pluck('name')
-            ->map(fn ($n) => strtolower($n))
-            ->all();
-
         $pensionContribution = 0.0;
-        foreach ($salaryBreakdown['deductions'] ?? [] as $k => $v) {
-            $name = is_array($v) && isset($v['name']) ? $v['name'] : $k;
-            $amount = is_array($v) && isset($v['amount']) ? $v['amount'] : $v;
-            if (in_array(strtolower($name), $pensionComponentNames, true)) {
-                $pensionContribution += (float) $amount;
+        $otherTaxDeductibleDeductions = 0.0;
+        foreach ($salaryBreakdown['component_lines'] ?? [] as $line) {
+            if (! ($line['reduces_taxable_base'] ?? false)) {
+                continue;
+            }
+
+            if (($line['calculation_type'] ?? null) === 'zambia_pension') {
+                $pensionContribution += (float) $line['amount'];
+            } else {
+                $otherTaxDeductibleDeductions += (float) $line['amount'];
             }
         }
 
-        // ── Non-taxable income components ─────────────────────────────────────
-        // Earning components flagged is_taxable = false are paid to the employee
-        // (they stay in gross + net pay) but are excluded from the PAYE base.
-        // Match them by name against the breakdown and sum, mirroring the
-        // pension-relief approach above. NAPSA / NHIMA are unaffected.
-        $nonTaxableEarningNames = \DB::table('salary_components')
-            ->whereIn('id', array_column($employeeSalary->getNormalisedComponents(), 'id'))
-            ->where('type', 'earning')
-            ->where('is_taxable', false)
-            ->where('status', 'active')
-            ->whereIn('created_by', getCompanyAndUsersId())
-            ->pluck('name')
-            ->map(fn ($n) => strtolower($n))
-            ->all();
-
         $nonTaxableEarnings = 0.0;
-        foreach ($salaryBreakdown['earnings'] ?? [] as $k => $v) {
-            $name   = is_array($v) && isset($v['name']) ? $v['name'] : $k;
-            $amount = is_array($v) && isset($v['amount']) ? $v['amount'] : $v;
-            if (in_array(strtolower($name), $nonTaxableEarningNames, true)) {
-                $nonTaxableEarnings += (float) $amount;
+        foreach ($salaryBreakdown['component_lines'] ?? [] as $line) {
+            if (($line['is_earning'] ?? false) && ! ($line['is_taxable'] ?? true)) {
+                $nonTaxableEarnings += (float) $line['amount'];
             }
         }
 
@@ -300,7 +272,8 @@ class PayrollRun extends BaseModel
             $pensionContribution,
             $exemptPaye,
             $nonTaxableEarnings,
-            $exemptSdl
+            $exemptSdl,
+            $otherTaxDeductibleDeductions
         );
 
         // ────────────────────────────────────────────────────────────────────
@@ -308,21 +281,11 @@ class PayrollRun extends BaseModel
         //      additional (non-statutory) deductions are included in net pay.
         // ────────────────────────────────────────────────────────────────────
 
-        $zambiaDeductionNames = ['paye tax', 'napsa employee', 'nhima employee'];
-
         // Collect any salary-component deductions that are NOT statutory
         $deductionsFromComponents = [];
-        foreach ($salaryBreakdown['deductions'] ?? [] as $k => $v) {
-            if (is_array($v) && isset($v['name'])) {
-                if (in_array(strtolower($v['name']), $zambiaDeductionNames)) {
-                    continue;
-                }
-                $deductionsFromComponents[] = $v;
-            } else {
-                if (in_array(strtolower($k), $zambiaDeductionNames)) {
-                    continue;
-                }
-                $deductionsFromComponents[] = ['name' => $k, 'amount' => $v];
+        foreach ($salaryBreakdown['component_lines'] ?? [] as $line) {
+            if ($line['is_deduction'] ?? false) {
+                $deductionsFromComponents[] = $this->componentBreakdownLine($line);
             }
         }
 
@@ -337,30 +300,25 @@ class PayrollRun extends BaseModel
 
         // ── Build earnings breakdown ──────────────────────────────────────────
         $earningsFromComponents = [];
-        foreach ($salaryBreakdown['earnings'] ?? [] as $k => $v) {
-            if (is_array($v) && isset($v['name'])) {
-                if (in_array($v['type'] ?? '', ['zambia_napsa_employer', 'zambia_nhima_employer', 'zambia_sdl'])) {
-                    continue;
-                }
-                if (strtolower($v['name']) === 'basic salary') {
-                    continue;
-                }
-                $earningsFromComponents[] = $v;
-            } else {
-                if (strtolower($k) === 'basic salary') {
-                    continue;
-                }
-                $earningsFromComponents[] = ['name' => $k, 'amount' => $v];
+        foreach ($salaryBreakdown['component_lines'] ?? [] as $line) {
+            if ($line['is_earning'] ?? false) {
+                $earningsFromComponents[] = $this->componentBreakdownLine($line);
             }
         }
 
         // Only show NAPSA/NHIMA employer contributions if not exempt
         $employerContributions = [];
+        foreach ($salaryBreakdown['component_lines'] ?? [] as $line) {
+            if ($line['is_employer_contribution'] ?? false) {
+                $employerContributions[] = $this->componentBreakdownLine($line);
+            }
+        }
         if (!$exemptNapsa) {
             $employerContributions[] = [
                 'name'   => 'NAPSA Employer',
                 'amount' => $zambia['napsa_employer'],
                 'type'   => 'zambia_napsa_employer',
+                'is_employer_contribution' => true,
             ];
         }
         if (!$exemptNhima) {
@@ -368,6 +326,7 @@ class PayrollRun extends BaseModel
                 'name'   => 'NHIMA Employer',
                 'amount' => $zambia['nhima_employer'],
                 'type'   => 'zambia_nhima_employer',
+                'is_employer_contribution' => true,
             ];
         }
         // SDL: employer levy (0.5% of this employee's gross), shown as an
@@ -377,6 +336,7 @@ class PayrollRun extends BaseModel
                 'name'   => 'SDL (Employer)',
                 'amount' => $zambia['sdl'],
                 'type'   => 'zambia_sdl',
+                'is_employer_contribution' => true,
             ];
         }
 
@@ -436,6 +396,17 @@ class PayrollRun extends BaseModel
             'deductions_breakdown'   => $deductionsBreakdown,
             'created_by'             => $this->created_by,
         ]);
+    }
+
+    private function componentBreakdownLine(array $line): array
+    {
+        return [
+            'component_id' => $line['component_id'],
+            'name' => $line['name'],
+            'amount' => round((float) $line['amount'], 2),
+            'type' => $line['type'],
+            'is_employer_contribution' => (bool) ($line['is_employer_contribution'] ?? false),
+        ];
     }
 
     // ─── Leave Data ──────────────────────────────────────────────────────────

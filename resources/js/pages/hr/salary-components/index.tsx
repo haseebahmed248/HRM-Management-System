@@ -1,6 +1,6 @@
 // pages/hr/salary-components/index.tsx
 import { useState } from 'react';
-import { PageTemplate } from '@/components/page-template';
+import { PageTemplate, type PageAction } from '@/components/page-template';
 import { usePage, router } from '@inertiajs/react';
 import { Plus, Upload } from 'lucide-react';
 import { hasPermission } from '@/utils/authorization';
@@ -13,10 +13,26 @@ import { useTranslation } from 'react-i18next';
 import { Pagination } from '@/components/ui/pagination';
 import { SearchAndFilterBar } from '@/components/ui/search-and-filter-bar';
 
+interface ComponentTypeOption {
+  value: string;
+  label: string;
+  description: string;
+  bucket: 'earnings' | 'deductions' | 'employer_contributions';
+  taxable_effect: 'increase' | 'reduce' | 'none';
+}
+
+interface FlashMessages {
+  success?: string;
+  error?: string;
+}
+
 export default function SalaryComponents() {
   const { t } = useTranslation();
-  const { auth, salaryComponents, filters: pageFilters = {}, globalSettings } = usePage().props as any;
+  const { auth, salaryComponents, componentTypes = [], filters: pageFilters = {}, globalSettings } = usePage().props as any;
   const permissions = auth?.permissions || [];
+  const typeDefinitions = componentTypes as ComponentTypeOption[];
+
+  const typeDefinition = (value: string) => typeDefinitions.find((type) => type.value === value);
 
   // State
   const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
@@ -109,10 +125,11 @@ export default function SalaryComponents() {
           if (!globalSettings?.is_demo) {
             toast.dismiss();
           }
-          if (page.props.flash.success) {
-            toast.success(t(page.props.flash.success));
-          } else if (page.props.flash.error) {
-            toast.error(t(page.props.flash.error));
+          const flash = page.props.flash as FlashMessages | undefined;
+          if (flash?.success) {
+            toast.success(t(flash.success));
+          } else if (flash?.error) {
+            toast.error(t(flash.error));
           }
         },
         onError: (errors) => {
@@ -137,10 +154,11 @@ export default function SalaryComponents() {
           if (!globalSettings?.is_demo) {
             toast.dismiss();
           }
-          if (page.props.flash.success) {
-            toast.success(t(page.props.flash.success));
-          } else if (page.props.flash.error) {
-            toast.error(t(page.props.flash.error));
+          const flash = page.props.flash as FlashMessages | undefined;
+          if (flash?.success) {
+            toast.success(t(flash.success));
+          } else if (flash?.error) {
+            toast.error(t(flash.error));
           }
         },
         onError: (errors) => {
@@ -168,10 +186,11 @@ export default function SalaryComponents() {
         if (!globalSettings?.is_demo) {
           toast.dismiss();
         }
-        if (page.props.flash.success) {
-          toast.success(t(page.props.flash.success));
-        } else if (page.props.flash.error) {
-          toast.error(t(page.props.flash.error));
+        const flash = page.props.flash as FlashMessages | undefined;
+        if (flash?.success) {
+          toast.success(t(flash.success));
+        } else if (flash?.error) {
+          toast.error(t(flash.error));
         }
       },
       onError: (errors) => {
@@ -198,10 +217,11 @@ export default function SalaryComponents() {
         if (!globalSettings?.is_demo) {
           toast.dismiss();
         }
-        if (page.props.flash.success) {
-          toast.success(t(page.props.flash.success));
-        } else if (page.props.flash.error) {
-          toast.error(t(page.props.flash.error));
+        const flash = page.props.flash as FlashMessages | undefined;
+        if (flash?.success) {
+          toast.success(t(flash.success));
+        } else if (flash?.error) {
+          toast.error(t(flash.error));
         }
       },
       onError: (errors) => {
@@ -231,7 +251,7 @@ export default function SalaryComponents() {
   };
 
   // Define page actions
-  const pageActions = [];
+  const pageActions: PageAction[] = [];
 
   // track-a/12: bulk import button (shown to users with import permission)
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -270,14 +290,20 @@ export default function SalaryComponents() {
     {
       key: 'type',
       label: t('Type'),
-      render: (value: string) => (
-        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${value === 'earning'
-          ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20'
-          : 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
-          }`}>
-          {value === 'earning' ? t('Earning') : t('Deduction')}
-        </span>
-      )
+      render: (value: string) => {
+        const definition = typeDefinition(value);
+        const bucketStyles: Record<ComponentTypeOption['bucket'], string> = {
+          earnings: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
+          deductions: 'bg-rose-50 text-rose-700 ring-rose-600/20',
+          employer_contributions: 'bg-amber-50 text-amber-800 ring-amber-600/20',
+        };
+
+        return (
+          <span className={`inline-flex max-w-52 items-center whitespace-normal rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${bucketStyles[definition?.bucket ?? 'earnings']}`}>
+            {definition?.label ?? value}
+          </span>
+        );
+      }
     },
     {
       key: 'calculation_type',
@@ -390,8 +416,7 @@ export default function SalaryComponents() {
   // Prepare options for filters
   const typeOptions = [
     { value: 'all', label: t('All Types') , disabled : true},
-    { value: 'earning', label: t('Earning') },
-    { value: 'deduction', label: t('Deduction') }
+    ...typeDefinitions.map((type) => ({ value: type.value, label: t(type.label) })),
   ];
 
   const calculationTypeOptions = [
@@ -412,6 +437,7 @@ export default function SalaryComponents() {
   return (
     <PageTemplate
       title={t("Salary Components")}
+      description={t('Define how each pay component affects cash pay, PAYE, and employer contributions.')}
       url="/hr/salary-components"
       actions={pageActions}
       breadcrumbs={breadcrumbs}
@@ -483,7 +509,6 @@ export default function SalaryComponents() {
           permissions={permissions}
           entityPermissions={{
             view: 'view-salary-components',
-            create: 'create-salary-components',
             edit: 'edit-salary-components',
             delete: 'delete-salary-components'
           }}
@@ -514,10 +539,8 @@ export default function SalaryComponents() {
               label: t('Type'),
               type: 'select',
               required: true,
-              options: [
-                { value: 'earning', label: t('Earning') },
-                { value: 'deduction', label: t('Deduction') }
-              ]
+              options: typeDefinitions.map((type) => ({ value: type.value, label: t(type.label) })),
+              defaultValue: 'income',
             },
             {
               name: 'calculation_type',
@@ -532,8 +555,8 @@ export default function SalaryComponents() {
                 { value: 'zambia_pension', label: t('Zambia Pension (PAYE relief)') }
               ]
             },
-            { name: 'default_amount', label: t('Fixed Amount'), type: 'number', min: 0, step: 0.01 },
-            { name: 'percentage_of_basic', label: t('Percentage of Basic'), type: 'number', min: 0, max: 100, step: 0.01 },
+            { name: 'default_amount', label: t('Fixed Amount'), type: 'number' },
+            { name: 'percentage_of_basic', label: t('Percentage of Basic'), type: 'number' },
             { name: 'is_taxable', label: t('Taxable (subject to PAYE)'), type: 'checkbox', defaultValue: true },
             // { name: 'is_mandatory', label: t('Is Mandatory'), type: 'checkbox', defaultValue: false },
             {
@@ -558,6 +581,7 @@ export default function SalaryComponents() {
               : t('View Salary Component')
         }
         mode={formMode}
+        description={t('Choose the component type by its payroll effect. Taxable can still be switched off for exempt income or leave pay.')}
       />
 
       {/* Delete Modal */}
@@ -577,7 +601,7 @@ export default function SalaryComponents() {
         importRoute="hr.salary-components.import"
         parseRoute="hr.salary-components.parse"
         sampleRoute="hr.salary-components.download.template"
-        importNotes={t('Required: Name, Type (earning/deduction), Calculation Type (fixed/percentage/zambia_pension). Duplicate names within the same tenant are skipped, not errored.')}
+        importNotes={t('Required: Name, one of the six component Types, and Calculation Type (fixed/percentage/zambia_pension). Legacy earning/deduction imports remain accepted. Duplicate names within the same tenant are skipped.')}
         databaseFields={[
           { key: 'Name', required: true },
           { key: 'Description' },

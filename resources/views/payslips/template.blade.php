@@ -26,7 +26,7 @@
     $earningsList = [];
     foreach ($rawEarnings as $key => $value) {
         if (is_array($value) && isset($value['name'])) {
-            if (in_array($value['type'] ?? '', ['zambia_napsa_employer', 'zambia_nhima_employer', 'zambia_sdl'])) {
+            if (\App\Support\ComponentType::isEmployerContributionLine($value)) {
                 continue;
             }
             $earningsList[] = ['name' => $value['name'], 'amount' => $value['amount']];
@@ -57,7 +57,7 @@
 
     $employerItems = [];
     foreach ($rawEarnings as $value) {
-        if (is_array($value) && in_array($value['type'] ?? '', ['zambia_napsa_employer', 'zambia_nhima_employer', 'zambia_sdl'])) {
+        if (is_array($value) && \App\Support\ComponentType::isEmployerContributionLine($value)) {
             $employerItems[] = $value;
         }
     }

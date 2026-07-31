@@ -154,7 +154,9 @@ class EmployeeSalaryController extends Controller
                 $normalised = $salary->getNormalisedComponents();
                 if (!empty($normalised)) {
                     $ids = array_column($normalised, 'id');
-                    $components = SalaryComponent::whereIn('id', $ids)->get(['id', 'name', 'type']);
+                    $components = SalaryComponent::whereIn('id', $ids)
+                        ->whereIn('created_by', getCompanyAndUsersId())
+                        ->get(['id', 'name', 'type']);
                     $salary->component_names = $components->pluck('name')->toArray();
                     $salary->component_types = $components->pluck('type')->toArray();
                 } else {
@@ -173,6 +175,12 @@ class EmployeeSalaryController extends Controller
             // All components (for displaying existing assignments, even inactive ones)
             $salaryComponents = SalaryComponent::whereIn('created_by', getCompanyAndUsersId())
                 ->get(['id', 'name', 'type', 'calculation_type', 'default_amount', 'percentage_of_basic', 'status']);
+            $salaryComponents->each(function (SalaryComponent $component) {
+                $component->setAttribute('type_label', $component->componentType()->label());
+                $component->setAttribute('is_earning', $component->isEarning());
+                $component->setAttribute('is_deduction', $component->isDeduction());
+                $component->setAttribute('is_employer_contribution', $component->isEmployerContribution());
+            });
 
             return Inertia::render('hr/employee-salaries/index', [
                 'employeeSalaries' => $employeeSalaries,

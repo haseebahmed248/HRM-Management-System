@@ -180,8 +180,11 @@ class EmployeeSalary extends BaseModel
 
         $earnings        = ['Basic Salary' => $this->basic_salary];
         $deductions      = [];
+        $employerContributions = [];
+        $componentLines  = [];
         $totalEarnings   = $this->basic_salary;
         $totalDeductions = 0;
+        $totalEmployerContributions = 0;
 
         foreach ($normalisedComponents as $entry) {
             $id        = (int) $entry['id'];
@@ -197,12 +200,32 @@ class EmployeeSalary extends BaseModel
                 ? $customAmounts[$id]
                 : $component->calculateAmount($this->basic_salary);
 
-            if ($component->type === 'earning') {
+            $componentType = $component->componentType();
+            $line = [
+                'component_id' => $component->id,
+                'name' => $component->name,
+                'amount' => round((float) $amount, 2),
+                'type' => $componentType->value,
+                'calculation_type' => $component->calculation_type,
+                'is_taxable' => (bool) $component->is_taxable,
+                'is_earning' => $component->isEarning(),
+                'is_deduction' => $component->isDeduction(),
+                'is_employer_contribution' => $component->isEmployerContribution(),
+                'reduces_taxable_base' => $component->reducesTaxableBase(),
+                'increases_taxable_base' => $component->increasesTaxableBase(),
+                'is_cash' => $component->isCash(),
+            ];
+            $componentLines[] = $line;
+
+            if ($component->isEarning()) {
                 $earnings[$component->name] = $amount;
                 $totalEarnings += $amount;
-            } else {
+            } elseif ($component->isDeduction()) {
                 $deductions[$component->name] = $amount;
                 $totalDeductions += $amount;
+            } elseif ($component->isEmployerContribution()) {
+                $employerContributions[$component->name] = $amount;
+                $totalEmployerContributions += $amount;
             }
         }
 
@@ -210,8 +233,11 @@ class EmployeeSalary extends BaseModel
             'basic_salary'    => $this->basic_salary,
             'earnings'        => $earnings,
             'deductions'      => $deductions,
+            'employer_contributions' => $employerContributions,
+            'component_lines' => $componentLines,
             'total_earnings'  => $totalEarnings,
             'total_deductions'=> $totalDeductions,
+            'total_employer_contributions' => $totalEmployerContributions,
             'gross_salary'    => $totalEarnings,
             'net_salary'      => $totalEarnings - $totalDeductions,
         ];

@@ -77,8 +77,8 @@ class EmployeeSalarySeeder extends Seeder
      */
     private function getComponentsForEmployee($salaryComponents, $employeeIndex)
     {
-        $earnings = $salaryComponents->where('type', 'earning');
-        $deductions = $salaryComponents->where('type', 'deduction');
+        $earnings = $salaryComponents->filter(fn (SalaryComponent $component) => $component->isEarning());
+        $deductions = $salaryComponents->filter(fn (SalaryComponent $component) => $component->isDeduction());
 
         $selectedComponents = [];
 

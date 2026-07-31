@@ -27,7 +27,7 @@ class SalaryComponentSeeder extends Seeder
             [
                 'name' => 'House Rent Allowance (HRA)',
                 'description' => 'House rent allowance for accommodation expenses',
-                'type' => 'earning',
+                'type' => 'income',
                 'calculation_type' => 'percentage',
                 'default_amount' => 0.00,
                 'percentage_of_basic' => 40.00,
@@ -38,7 +38,7 @@ class SalaryComponentSeeder extends Seeder
             [
                 'name' => 'Transport Allowance',
                 'description' => 'Transportation allowance for commuting expenses',
-                'type' => 'earning',
+                'type' => 'income',
                 'calculation_type' => 'fixed',
                 'default_amount' => 2000.00,
                 'percentage_of_basic' => null,
@@ -49,7 +49,7 @@ class SalaryComponentSeeder extends Seeder
             [
                 'name' => 'Medical Allowance',
                 'description' => 'Medical allowance for healthcare expenses',
-                'type' => 'earning',
+                'type' => 'income',
                 'calculation_type' => 'fixed',
                 'default_amount' => 1500.00,
                 'percentage_of_basic' => null,
@@ -60,7 +60,7 @@ class SalaryComponentSeeder extends Seeder
             [
                 'name' => 'Dearness Allowance (DA)',
                 'description' => 'Dearness allowance to offset inflation impact',
-                'type' => 'earning',
+                'type' => 'income',
                 'calculation_type' => 'percentage',
                 'default_amount' => 0.00,
                 'percentage_of_basic' => 15.00,
@@ -71,7 +71,7 @@ class SalaryComponentSeeder extends Seeder
             [
                 'name' => 'Special Allowance',
                 'description' => 'Special allowance for additional responsibilities',
-                'type' => 'earning',
+                'type' => 'income',
                 'calculation_type' => 'fixed',
                 'default_amount' => 3000.00,
                 'percentage_of_basic' => null,
@@ -83,7 +83,7 @@ class SalaryComponentSeeder extends Seeder
             [
                 'name' => 'Provident Fund (PF)',
                 'description' => 'Employee provident fund contribution',
-                'type' => 'deduction',
+                'type' => 'deduction_non_tax',
                 'calculation_type' => 'percentage',
                 'default_amount' => 0.00,
                 'percentage_of_basic' => 12.00,
@@ -94,7 +94,7 @@ class SalaryComponentSeeder extends Seeder
             [
                 'name' => 'Employee State Insurance (ESI)',
                 'description' => 'Employee state insurance contribution',
-                'type' => 'deduction',
+                'type' => 'deduction_non_tax',
                 'calculation_type' => 'percentage',
                 'default_amount' => 0.00,
                 'percentage_of_basic' => 0.75,
@@ -105,7 +105,7 @@ class SalaryComponentSeeder extends Seeder
             [
                 'name' => 'Professional Tax',
                 'description' => 'Professional tax deduction as per state regulations',
-                'type' => 'deduction',
+                'type' => 'deduction_non_tax',
                 'calculation_type' => 'fixed',
                 'default_amount' => 200.00,
                 'percentage_of_basic' => null,
@@ -116,7 +116,7 @@ class SalaryComponentSeeder extends Seeder
             [
                 'name' => 'Income Tax (TDS)',
                 'description' => 'Tax deducted at source on salary income',
-                'type' => 'deduction',
+                'type' => 'deduction_non_tax',
                 'calculation_type' => 'percentage',
                 'default_amount' => 0.00,
                 'percentage_of_basic' => 10.00,
@@ -127,7 +127,7 @@ class SalaryComponentSeeder extends Seeder
             [
                 'name' => 'Loan Deduction',
                 'description' => 'Employee loan repayment deduction',
-                'type' => 'deduction',
+                'type' => 'deduction_non_tax',
                 'calculation_type' => 'fixed',
                 'default_amount' => 1000.00,
                 'percentage_of_basic' => null,
