@@ -74,6 +74,19 @@ class PayrollRun extends BaseModel
         $this->save();
     }
 
+    public static function resolveWorkSchedule(array $settings): array
+    {
+        $workingDays = json_decode($settings['working_days'] ?? '[]', true);
+        $workingDays = is_array($workingDays) ? $workingDays : [];
+
+        return [
+            'working_days' => $workingDays,
+            'days_per_week' => max(1, count($workingDays)),
+            'hours_per_day' => max(0.01, (float) ($settings['hours_per_day'] ?? 8)),
+            'days_per_month' => max(1, (int) ($settings['working_days_per_month'] ?? 22)),
+        ];
+    }
+
     // ─── Process Payroll ─────────────────────────────────────────────────────
 
     public function processPayroll(array $filters = [])
@@ -165,8 +178,10 @@ class PayrollRun extends BaseModel
             return;
         }
 
-        $globalSettings     = settings();
-        $workingDaysIndices = json_decode($globalSettings['working_days'] ?? '[]', true);
+        $companyId          = getCompanyId($this->created_by) ?? $this->created_by;
+        $globalSettings     = settings($companyId);
+        $workSchedule       = static::resolveWorkSchedule($globalSettings);
+        $workingDaysIndices = $workSchedule['working_days'];
 
         if (empty($workingDaysIndices)) {
             throw new \Exception(__('Please configure working days first.'));
@@ -177,15 +192,9 @@ class PayrollRun extends BaseModel
             return;
         }
 
-        // ── Working days in the period (needed before we compute base pay) ────
-        $startDate        = new \DateTime($this->pay_period_start);
-        $endDate          = new \DateTime($this->pay_period_end);
-        $totalWorkingDays = 0;
-        for ($date = clone $startDate; $date <= $endDate; $date->modify('+1 day')) {
-            if (in_array((int) $date->format('w'), $workingDaysIndices)) {
-                $totalWorkingDays++;
-            }
-        }
+        // The configured normal monthly schedule is the payroll denominator.
+        // Calendar dates and pay date remain relevant to attendance queries only.
+        $totalWorkingDays = $workSchedule['days_per_month'];
 
         // ── Item 7: interpret the salary by its rate type ────────────────────
         // 'monthly' leaves basic_salary unchanged (existing behaviour, so every
@@ -194,8 +203,8 @@ class PayrollRun extends BaseModel
         // the in-memory salary object (never saved) so that components (% of
         // basic), the basic line, the NHIMA base and unpaid-leave pro-rating all
         // use the correct period figure.
-        $workingDaysPerWeek = max(1, count($workingDaysIndices));
-        $hoursPerDay        = (float) ($globalSettings['hours_per_day'] ?? 8);
+        $workingDaysPerWeek = $workSchedule['days_per_week'];
+        $hoursPerDay        = $workSchedule['hours_per_day'];
         if (($employeeSalary->rate_type ?? 'monthly') !== 'monthly') {
             $employeeSalary->basic_salary = $employeeSalary->basePayForPeriod(
                 $totalWorkingDays,

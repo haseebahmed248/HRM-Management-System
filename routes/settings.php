@@ -82,7 +82,7 @@ Route::middleware(['auth', 'verified', 'plan.access'])->group(function () {
 
     // Working Days Settings routes
     Route::get('settings/working-days/get', [WorkingDaysSettingController::class, 'getWorkingDaysSettings'])->name('settings.working-days.get');
-    Route::post('settings/working-days/update', [WorkingDaysSettingController::class, 'updateWorkingDaysSettings'])->name('settings.working-days.update');
+    Route::post('settings/working-days/update', [SystemSettingsController::class, 'updateWorkingDays'])->name('settings.working-days.update');
 
     // Webhook Settings routes
     Route::get('settings/webhooks', [WebhookController::class, 'index'])->name('settings.webhooks.index');

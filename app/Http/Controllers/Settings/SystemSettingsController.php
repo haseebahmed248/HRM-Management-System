@@ -13,6 +13,50 @@ use Illuminate\Support\Facades\Storage;
 
 class SystemSettingsController extends Controller
 {
+    public function updateWorkingDays(Request $request)
+    {
+        $user = $request->user();
+        if ($user->type !== 'company' && ! $user->can('update-working-days-settings')) {
+            return redirect()->back()->with('error', __('Permission Denied.'));
+        }
+
+        $validated = $request->validate([
+            'work_days_pattern' => 'required|string|in:mon_fri,mon_sat,custom',
+            'hours_per_day' => 'required|numeric|gt:0|max:24',
+            'hours_per_week' => 'required|numeric|gt:0|max:168',
+            'working_days_per_month' => 'required|integer|min:1|max:31',
+            'working_days' => 'required|array|min:1|max:7',
+            'working_days.*' => 'required|integer|between:0,6|distinct',
+        ]);
+
+        $companyId = getCompanyId($user->id) ?? $user->id;
+        $workingDays = array_values(array_unique(array_map('intval', $validated['working_days'])));
+        sort($workingDays);
+
+        if ($validated['work_days_pattern'] === 'mon_fri') {
+            $workingDays = [1, 2, 3, 4, 5];
+        } elseif ($validated['work_days_pattern'] === 'mon_sat') {
+            $workingDays = [1, 2, 3, 4, 5, 6];
+        }
+
+        \DB::transaction(function () use ($validated, $workingDays, $companyId) {
+            updateSetting('work_days_pattern', $validated['work_days_pattern'], $companyId);
+            updateSetting('hours_per_day', (string) $validated['hours_per_day'], $companyId);
+            updateSetting('hours_per_week', (string) $validated['hours_per_week'], $companyId);
+            updateSetting('working_days_per_month', (string) $validated['working_days_per_month'], $companyId);
+            updateSetting('working_days', json_encode($workingDays), $companyId);
+        });
+
+        \App\Models\AuditLog::record(
+            'system',
+            'system_change',
+            'Working Days Settings',
+            'Working days schedule updated'
+        );
+
+        return redirect()->back()->with('success', __('Working days settings updated successfully.'));
+    }
+
     public function update(Request $request)
     {
         try {

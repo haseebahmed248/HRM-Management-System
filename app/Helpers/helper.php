@@ -979,6 +979,10 @@ if (! function_exists('defaultSettings')) {
             'currencySymbolSpace' => false,
             'currencySymbolPosition' => 'before',
 
+            'work_days_pattern' => 'mon_fri',
+            'hours_per_day' => 8,
+            'hours_per_week' => 40,
+            'working_days_per_month' => 22,
             'working_days' => '[1,2,3,4,5]',
 
             'metaKeywords' => $productName.' - All-in-One HR Management Software',
