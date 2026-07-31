@@ -160,7 +160,7 @@ export default function WorkingDaysSettings({ settings = {} }: WorkingDaysSettin
                 </Button>
             }
         >
-            <form id="working-days-form" onSubmit={handleSubmit} className="space-y-6">
+            <form id="working-days-form" onSubmit={handleSubmit} className="min-w-0 space-y-6">
                 <div className="space-y-2">
                     <Label>{t('Schedule Pattern')}</Label>
                     <ToggleGroup
@@ -168,21 +168,21 @@ export default function WorkingDaysSettings({ settings = {} }: WorkingDaysSettin
                         variant="outline"
                         value={schedule.pattern}
                         onValueChange={(value) => value && selectPattern(value as WorkDaysPattern)}
-                        className="grid w-full grid-cols-1 sm:grid-cols-3"
+                        className="grid w-full grid-cols-3"
                     >
-                        <ToggleGroupItem value="mon_fri" className="w-full">
+                        <ToggleGroupItem value="mon_fri" className="h-10 w-full px-2 text-xs sm:text-sm">
                             {t('Mon-Fri')}
                         </ToggleGroupItem>
-                        <ToggleGroupItem value="mon_sat" className="w-full">
+                        <ToggleGroupItem value="mon_sat" className="h-10 w-full px-2 text-xs sm:text-sm">
                             {t('Mon-Sat')}
                         </ToggleGroupItem>
-                        <ToggleGroupItem value="custom" className="w-full">
+                        <ToggleGroupItem value="custom" className="h-10 w-full px-2 text-xs sm:text-sm">
                             {t('Custom')}
                         </ToggleGroupItem>
                     </ToggleGroup>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div className="space-y-2">
                         <Label htmlFor="hours-per-day">{t('Hours per Day')}</Label>
                         <Input
@@ -229,7 +229,7 @@ export default function WorkingDaysSettings({ settings = {} }: WorkingDaysSettin
                         <Clock3 className="text-muted-foreground h-4 w-4" />
                         <Label>{t('Working Week')}</Label>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                    <div className="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-2">
                         {days.map((day) => (
                             <div key={day.index} className="flex min-h-14 items-center justify-between gap-2 rounded-md border px-3 py-2">
                                 <Label htmlFor={`working-day-${day.index}`} title={day.label} className="cursor-pointer text-sm">
