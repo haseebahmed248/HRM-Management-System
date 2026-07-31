@@ -2,14 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\PayslipMail;
 use App\Models\FinancialYear;
+use App\Models\LeaveBalance;
 use App\Models\PayrollEntry;
 use App\Models\PayrollRun;
 use App\Models\Payslip;
 use App\Models\User;
+use App\Services\MailConfigService;
+use App\Support\PayslipTemplateConfig;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class PayslipController extends Controller
@@ -245,55 +253,219 @@ class PayslipController extends Controller
         }
     }
 
-    public function download($payslipId)
+    public function preview(Request $request, $payslipId)
     {
         try {
-            $payslip = Payslip::with([
-                'employee',
-                'payrollEntry.payrollRun',
-                'payrollEntry.employee.employee',
-            ])
-                ->where('id', $payslipId)
-                ->whereIn('created_by', getCompanyAndUsersId())
-                ->first();
+            $payslip = $this->findPayslip($payslipId);
 
             if (!$payslip) {
                 return response()->json(['error' => __('Payslip not found.')], 404);
             }
 
-            $payrollEntry = $payslip->payrollEntry;
+            return view('payslips.template', $this->buildPayslipData(
+                $payslip,
+                $request->boolean('print') ? 'print' : 'preview'
+            ));
+        } catch (\Throwable $e) {
+            return response()->json(['error' => __('Failed to preview payslip: :message', ['message' => $e->getMessage()])], 500);
+        }
+    }
 
-            $userModel = $payrollEntry->employee;
-            if ($userModel && !$userModel->relationLoaded('employee')) {
-                $userModel->load('employee');
+    public function download($payslipId)
+    {
+        try {
+            $payslip = $this->findPayslip($payslipId);
+
+            if (!$payslip) {
+                return response()->json(['error' => __('Payslip not found.')], 404);
             }
 
-            $companySettings = settings();
-            $companyUser     = User::find(getCompanyId(Auth::user()->id));
-
-            if ($companyUser) {
-                $companySettings = array_merge($companySettings, [
-                    'companyEmail' => $companyUser->email ?? null,
-                ]);
-            }
-
-            $data = [
-                'payslip'         => $payslip,
-                'payrollEntry'    => $payrollEntry,
-                'employee'        => $userModel,
-                'payrollRun'      => $payrollEntry->payrollRun,
-                'earnings'        => $payrollEntry->earnings_breakdown ?? [],
-                'deductions'      => $payrollEntry->deductions_breakdown ?? [],
-                'employeeData'    => $userModel?->employee,
-                'companySettings' => $companySettings,
-            ];
+            $data = $this->buildPayslipData($payslip, 'pdf');
+            $pdf = Pdf::loadView('payslips.template', $data)->setPaper('a4', 'portrait');
+            $filename = $this->payslipFilename($payslip);
 
             $payslip->markAsDownloaded();
 
-            return view('payslips.template', $data);
-        } catch (\Exception $e) {
+            return $pdf->download($filename);
+        } catch (\Throwable $e) {
             return response()->json(['error' => __('Failed to download payslip: :message', ['message' => $e->getMessage()])], 500);
         }
+    }
+
+    public function emailPayslip($payslipId)
+    {
+        try {
+            $payslip = $this->findPayslip($payslipId);
+
+            if (!$payslip) {
+                return response()->json(['success' => false, 'message' => __('Payslip not found.')], 404);
+            }
+
+            $employee = $payslip->payrollEntry?->employee;
+            if (!$employee || empty($employee->email)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => __('This employee does not have an email address.'),
+                ], 422);
+            }
+
+            $data = $this->buildPayslipData($payslip, 'pdf');
+            $pdfContent = Pdf::loadView('payslips.template', $data)
+                ->setPaper('a4', 'portrait')
+                ->output();
+
+            $period = $payslip->pay_period_start->format('F Y');
+            $filename = $this->payslipFilename($payslip);
+            $companyId = getCompanyId(auth()->id()) ?? auth()->id();
+
+            MailConfigService::setDynamicConfig($companyId);
+            Mail::to($employee->email, $employee->name)->send(new PayslipMail(
+                employeeName: $employee->name ?? $payslip->employee_name ?? __('Employee'),
+                period: $period,
+                pdfContent: $pdfContent,
+                pdfFilename: $filename,
+            ));
+
+            $payslip->markAsSent();
+
+            return response()->json([
+                'success' => true,
+                'message' => __('Payslip emailed successfully to :email.', ['email' => $employee->email]),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Payslip email failed', [
+                'payslip_id' => $payslipId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => __('Failed to email payslip: :message', ['message' => $e->getMessage()]),
+            ], 500);
+        }
+    }
+
+    private function findPayslip($payslipId): ?Payslip
+    {
+        return Payslip::with([
+            'employee',
+            'payrollEntry.payrollRun',
+            'payrollEntry.employee.employee.designation',
+        ])
+            ->where('id', $payslipId)
+            ->whereIn('created_by', getCompanyAndUsersId())
+            ->first();
+    }
+
+    private function buildPayslipData(Payslip $payslip, string $renderMode): array
+    {
+        $payrollEntry = $payslip->payrollEntry;
+        $userModel = $payrollEntry->employee;
+        $employeeData = $userModel?->employee;
+        $payrollRun = $payrollEntry->payrollRun;
+        $companyId = getCompanyId(auth()->id()) ?? auth()->id();
+        $companyUser = User::find($companyId);
+        $companySettings = array_merge(defaultSettings(), settings($companyId));
+
+        if ($companyUser) {
+            $companySettings = array_merge($companySettings, [
+                'companyEmail' => $companySettings['companyEmail'] ?? $companyUser->email,
+                'companyName' => $companyUser->name,
+            ]);
+        }
+
+        $leaveBalances = LeaveBalance::with('leaveType:id,name')
+            ->where('employee_id', $payrollEntry->employee_id)
+            ->where('year', $payrollRun->pay_period_start->format('Y'))
+            ->whereIn('created_by', getCompanyAndUsersId())
+            ->orderBy('leave_type_id')
+            ->get()
+            ->map(function (LeaveBalance $balance) {
+                $allocated = (float) ($balance->allocated_days ?? 0);
+                $used = (float) ($balance->used_days ?? 0);
+                $remaining = $balance->remaining_days !== null
+                    ? (float) $balance->remaining_days
+                    : $allocated - $used;
+
+                return [
+                    'name' => $balance->leaveType?->name ?? __('Leave'),
+                    'entitled' => $allocated,
+                    'taken' => $used,
+                    'balance' => $remaining,
+                ];
+            })
+            ->values();
+
+        $employeeFieldValues = [
+            'employee_name' => $userModel?->name ?? $payslip->employee_name ?? __('N/A'),
+            'nrc' => $employeeData?->nrc ?: __('N/A'),
+            'designation' => $employeeData?->designation?->name ?: __('N/A'),
+            'pay_period' => $payrollRun->pay_period_start->format('d M Y') . ' - ' . $payrollRun->pay_period_end->format('d M Y'),
+            'tpin' => $employeeData?->tpin ?: __('N/A'),
+            'napsa_number' => $employeeData?->napsa_number ?: __('N/A'),
+            'nhima_number' => $employeeData?->nhima_number ?: __('N/A'),
+            'date_of_joining' => $employeeData?->date_of_joining
+                ? Carbon::parse($employeeData->date_of_joining)->format('d M Y')
+                : __('N/A'),
+            'bank_name' => $employeeData?->bank_name ?: __('N/A'),
+            'account_number' => $employeeData?->account_number ?: __('N/A'),
+        ];
+
+        return [
+            'payslip' => $payslip,
+            'payrollEntry' => $payrollEntry,
+            'employee' => $userModel,
+            'payrollRun' => $payrollRun,
+            'earnings' => $payrollEntry->earnings_breakdown ?? [],
+            'deductions' => $payrollEntry->deductions_breakdown ?? [],
+            'employeeData' => $employeeData,
+            'employeeFieldValues' => $employeeFieldValues,
+            'companySettings' => $companySettings,
+            'templateConfig' => PayslipTemplateConfig::forCompany($companyId),
+            'leaveBalances' => $leaveBalances,
+            'logoDataUri' => $this->imageDataUri($companySettings['logoDark'] ?? $companySettings['logoLight'] ?? null),
+            'qrCodeDataUri' => $this->qrCodeDataUri(),
+            'renderMode' => $renderMode,
+        ];
+    }
+
+    private function payslipFilename(Payslip $payslip): string
+    {
+        $employeeName = Str::slug($payslip->employee?->name ?? $payslip->employee_name ?? 'employee');
+        $period = $payslip->pay_period_start->format('M-Y');
+
+        return "payslip-{$employeeName}-{$period}.pdf";
+    }
+
+    private function imageDataUri(?string $path): ?string
+    {
+        if (!$path) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'data:image/')) {
+            return $path;
+        }
+
+        if (filter_var($path, FILTER_VALIDATE_URL)) {
+            $path = (string) parse_url($path, PHP_URL_PATH);
+        }
+
+        $absolutePath = public_path(ltrim($path, '/'));
+        if (!is_file($absolutePath) || !is_readable($absolutePath)) {
+            return null;
+        }
+
+        $mime = mime_content_type($absolutePath) ?: 'image/png';
+
+        return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($absolutePath));
+    }
+
+    private function qrCodeDataUri(): string
+    {
+        $svg = \QrCode::format('svg')->size(80)->margin(0)->generate(config('app.url'));
+
+        return 'data:image/svg+xml;base64,' . base64_encode($svg);
     }
 
     public function bulkGenerate(Request $request)

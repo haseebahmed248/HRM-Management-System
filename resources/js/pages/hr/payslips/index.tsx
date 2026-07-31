@@ -8,6 +8,17 @@ import { useTranslation } from 'react-i18next';
 import { Pagination } from '@/components/ui/pagination';
 import { SearchAndFilterBar } from '@/components/ui/search-and-filter-bar';
 
+interface PayslipRow {
+  id: number;
+  employee?: { name?: string } | null;
+  employee_name?: string | null;
+}
+
+interface EmailPayslipResponse {
+  success: boolean;
+  message: string;
+}
+
 export default function Payslips() {
   const { t } = useTranslation();
   const {
@@ -34,6 +45,7 @@ export default function Payslips() {
   const [dateFrom, setDateFrom]                 = useState(pageFilters.date_from || defaultPeriod?.from || '');
   const [dateTo, setDateTo]                     = useState(pageFilters.date_to   || defaultPeriod?.to   || '');
   const [showFilters, setShowFilters]           = useState(false);
+  const [emailingPayslipId, setEmailingPayslipId] = useState<number | null>(null);
   // Track if user explicitly changed date filters (vs using defaults)
   const [userSetDates, setUserSetDates]         = useState(!!(pageFilters.date_from || pageFilters.date_to));
 
@@ -97,14 +109,56 @@ export default function Payslips() {
     );
   };
 
-  const handleAction = (action: string, item: any) => {
+  const handleAction = (action: string, item: PayslipRow) => {
+    if (action === 'preview') handlePreview(item);
+    if (action === 'print') handlePrint(item);
     if (action === 'download') handleDownload(item);
+    if (action === 'email') void handleEmail(item);
   };
 
-  const handleDownload = (payslip: any) => {
-    // Open payslip in new tab (same pattern as Reports)
+  const handlePreview = (payslip: PayslipRow) => {
+    window.open(route('hr.payslips.preview', payslip.id), '_blank', 'noopener,noreferrer');
+  };
+
+  const handlePrint = (payslip: PayslipRow) => {
+    window.open(`${route('hr.payslips.preview', payslip.id)}?print=1`, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleDownload = (payslip: PayslipRow) => {
     window.open(route('hr.payslips.download', payslip.id), '_blank');
     toast.success(t('Payslip download started'));
+  };
+
+  const handleEmail = async (payslip: PayslipRow) => {
+    if (emailingPayslipId !== null) return;
+
+    setEmailingPayslipId(payslip.id);
+    toast.loading(t('Emailing payslip...'));
+
+    try {
+      const response = await fetch(route('hr.payslips.email', payslip.id), {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '',
+        },
+      });
+      const result = (await response.json()) as EmailPayslipResponse;
+
+      toast.dismiss();
+      if (!response.ok || !result.success) {
+        toast.error(result.message || t('Failed to email payslip'));
+        return;
+      }
+
+      toast.success(result.message);
+      router.reload({ only: ['payslips'] });
+    } catch {
+      toast.dismiss();
+      toast.error(t('Failed to email payslip. Check the mail settings and try again.'));
+    } finally {
+      setEmailingPayslipId(null);
+    }
   };
 
   // Reset goes back to default period (latest payroll run)
@@ -222,11 +276,32 @@ export default function Payslips() {
 
   const actions = [
     {
+      label:              t('Preview'),
+      icon:               'Eye',
+      action:             'preview',
+      className:          'text-slate-600',
+      requiredPermission: 'manage-payslips',
+    },
+    {
+      label:              t('Print'),
+      icon:               'Printer',
+      action:             'print',
+      className:          'text-amber-600',
+      requiredPermission: 'manage-payslips',
+    },
+    {
       label:              t('Download PDF'),
       icon:               'Download',
       action:             'download',
       className:          'text-blue-500',
       requiredPermission: 'download-payslips',
+    },
+    {
+      label:              emailingPayslipId ? t('Emailing...') : t('Email'),
+      icon:               'Mail',
+      action:             'email',
+      className:          'text-emerald-600',
+      requiredPermission: 'manage-payslips',
     },
   ];
 
@@ -248,6 +323,7 @@ export default function Payslips() {
   return (
     <PageTemplate
       title={t('Payslips')}
+      description={t('Preview, download, print, or email employee payslips.')}
       url="/hr/payslips"
       actions={[]}
       breadcrumbs={breadcrumbs}
@@ -328,7 +404,6 @@ export default function Payslips() {
           permissions={permissions}
           entityPermissions={{
             view:   'view-payslips',
-            create: 'create-payslips',
             edit:   'edit-payslips',
             delete: 'delete-payslips',
           }}

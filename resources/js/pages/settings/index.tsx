@@ -22,6 +22,7 @@ import {
     Mail,
     Network,
     Palette,
+    ReceiptText,
     Search,
     Settings as SettingsIcon,
     Shield,
@@ -40,6 +41,7 @@ import IpRestrictionSettings from './components/ip-restriction-settings';
 import JoiningLetterSettings from './components/joining-letter-settings';
 import NocSettings from './components/noc-settings';
 import PaymentSettings from './components/payment-settings';
+import PayslipTemplateSettings, { type PayslipTemplateConfig } from './components/payslip-template-settings';
 import RecaptchaSettings from './components/recaptcha-settings';
 import SeoSettings from './components/seo-settings';
 import StorageSettings from './components/storage-settings';
@@ -70,12 +72,15 @@ export default function Settings() {
         languages = [],
         zambiaTaxSettings = {},
         employeeIdSettings = {},
+        payslipTemplateConfig,
     } = usePage().props as any;
 
     const isSaas = globalSettings?.is_saas;
     const [activeSection, setActiveSection] = useState('system-settings');
 
-    const allSidebarNavItems: (NavItem & { permission?: string })[] = [
+    type SettingsNavItem = NavItem & { href: string; permission?: string };
+
+    const allSidebarNavItems: SettingsNavItem[] = [
         {
             title: t('System Settings'),
             href: '#system-settings',
@@ -105,6 +110,12 @@ export default function Settings() {
             href: '#working-days-settings',
             icon: <Clock className="mr-2 h-4 w-4" />,
             permission: 'manage-working-days-settings',
+        },
+        {
+            title: t('Payslip Template'),
+            href: '#payslip-template-settings',
+            icon: <ReceiptText className="mr-2 h-4 w-4" />,
+            permission: 'manage-settings',
         },
         {
             title: t('IP Restriction Settings'),
@@ -194,6 +205,7 @@ export default function Settings() {
 
     const sidebarNavItems = allSidebarNavItems.filter((item) => {
         if (item.permission === 'manage-working-days-settings' && auth.user?.type === 'superadmin') return false;
+        if (item.href === '#payslip-template-settings' && auth.user?.type === 'superadmin') return false;
         if (item.permission === 'manage-biomatric-attedance-settings' && auth.user?.type === 'superadmin') return false;
         if (item.permission === 'manage-ip-restriction-settings' && auth.user?.type === 'superadmin') return false;
         if (item.permission === 'manage-noc' && auth.user?.type === 'superadmin') return false;
@@ -237,6 +249,7 @@ export default function Settings() {
     const brandSettingsRef = useRef<HTMLDivElement>(null);
     const currencySettingsRef = useRef<HTMLDivElement>(null);
     const workingDaysSettingsRef = useRef<HTMLDivElement>(null);
+    const payslipTemplateSettingsRef = useRef<HTMLDivElement>(null);
     const emailSettingsRef = useRef<HTMLDivElement>(null);
     const paymentSettingsRef = useRef<HTMLDivElement>(null);
     const storageSettingsRef = useRef<HTMLDivElement>(null);
@@ -260,7 +273,7 @@ export default function Settings() {
         const handleScroll = () => {
             const scrollPosition = window.scrollY + 100;
 
-            const pos = (ref: React.RefObject<HTMLDivElement>) => ref.current?.offsetTop || 0;
+            const pos = (ref: React.RefObject<HTMLDivElement | null>) => ref.current?.offsetTop || 0;
 
             const zambiaTaxPos = pos(zambiaTaxSettingsRef);
             const joiningLetterPos = pos(joiningLetterSettingsRef);
@@ -276,6 +289,7 @@ export default function Settings() {
             const storagePos = pos(storageSettingsRef);
             const paymentPos = pos(paymentSettingsRef);
             const workingDaysPos = pos(workingDaysSettingsRef);
+            const payslipTemplatePos = pos(payslipTemplateSettingsRef);
             const emailPos = pos(emailSettingsRef);
             const currencyPos = pos(currencySettingsRef);
             const brandPos = pos(brandSettingsRef);
@@ -306,6 +320,8 @@ export default function Settings() {
                 setActiveSection('storage-settings');
             } else if (scrollPosition >= paymentPos) {
                 setActiveSection('payment-settings');
+            } else if (scrollPosition >= payslipTemplatePos) {
+                setActiveSection('payslip-template-settings');
             } else if (scrollPosition >= workingDaysPos) {
                 setActiveSection('working-days-settings');
             } else if (scrollPosition >= emailPos) {
@@ -345,6 +361,7 @@ export default function Settings() {
     return (
         <PageTemplate
             title={t('Settings')}
+            description={t('Configure company, payroll, and system preferences.')}
             url="/settings"
             breadcrumbs={[{ title: t('Dashboard'), href: route('dashboard') }, { title: t('Settings') }]}
         >
@@ -367,7 +384,7 @@ export default function Settings() {
                     </div>
                     <div className="sticky top-20">
                         <ScrollArea className="hidden h-[calc(100vh-5rem)] md:block">
-                            <div className={`space-y-1 ${position === 'rtl' ? 'pl-4' : 'pr-4'}`}>
+                            <div className={`space-y-1 ${position === 'right' ? 'pl-4' : 'pr-4'}`}>
                                 {sidebarNavItems.map((item) => (
                                     <Button
                                         key={item.href}
@@ -431,6 +448,15 @@ export default function Settings() {
                                 <WorkingDaysSettings settings={systemSettings} />
                             </section>
                         )}
+
+                    {/* Payslip Template Settings */}
+                    {auth.user?.type !== 'superadmin' &&
+                        (auth.user?.type === 'company' || auth.permissions?.includes('manage-settings')) &&
+                        payslipTemplateConfig && (
+                        <section id="payslip-template-settings" ref={payslipTemplateSettingsRef} className="mb-8">
+                            <PayslipTemplateSettings config={payslipTemplateConfig as PayslipTemplateConfig} />
+                        </section>
+                    )}
 
                     {/* IP Restriction Settings */}
                     {auth.user?.type === 'company' && auth.permissions?.includes('manage-ip-restriction-settings') && (

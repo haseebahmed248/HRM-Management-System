@@ -1191,7 +1191,9 @@ Route::put('payroll-runs/{id}/approve-final',[PayrollRunController::class, 'appr
             Route::get('hr/payslips', [PayslipController::class, 'index'])->name('hr.payslips.index');
             Route::post('hr/payslips/generate', [PayslipController::class, 'generate'])->middleware('permission:create-payslips')->name('hr.payslips.generate');
             Route::post('hr/payslips/bulk-generate', [PayslipController::class, 'bulkGenerate'])->middleware('permission:create-payslips')->name('hr.payslips.bulk-generate');
+            Route::get('hr/payslips/{payslip}/preview', [PayslipController::class, 'preview'])->name('hr.payslips.preview');
             Route::get('hr/payslips/{payslip}/download', [PayslipController::class, 'download'])->middleware('permission:download-payslips')->name('hr.payslips.download');
+            Route::post('hr/payslips/{payslip}/email', [PayslipController::class, 'emailPayslip'])->name('hr.payslips.email');
         });
 
         // Biometric Attendance routes

@@ -13,12 +13,14 @@ use App\Models\IpRestriction;
 use App\Models\NocTemplate;
 use App\Models\ExperienceCertificateTemplate;
 use App\Models\JoiningLetterTemplate;
+use App\Support\PayslipTemplateConfig;
 
 class SettingsController extends Controller
 {
     public function index()
     {
         $systemSettings = settings();
+        $companyId = getCompanyId(auth()->id()) ?? auth()->id();
         $currencies = Currency::all();
         $paymentSettings = PaymentSetting::getUserSettings(auth()->id());
         $webhooks = Webhook::where('user_id', auth()->id())->get();
@@ -91,6 +93,7 @@ $zambiaTaxSettings = array_merge(
             'joiningLetterTemplates'          => $joiningLetterTemplates,
             'experienceCertificateTemplates'  => $experienceCertificateTemplates,
             'zambiaTaxSettings'               => $zambiaTaxSettings,
+            'payslipTemplateConfig'           => PayslipTemplateConfig::forCompany($companyId),
         ]);
     }
 }

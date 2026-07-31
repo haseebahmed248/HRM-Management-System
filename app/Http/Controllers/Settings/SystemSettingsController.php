@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Support\PayslipTemplateConfig;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -13,6 +14,50 @@ use Illuminate\Support\Facades\Storage;
 
 class SystemSettingsController extends Controller
 {
+    public function updatePayslipTemplate(Request $request)
+    {
+        $user = $request->user();
+        if (!$user->can('manage-settings') || $user->type === 'superadmin') {
+            return redirect()->back()->with('error', __('Permission Denied.'));
+        }
+
+        $allowedFields = implode(',', PayslipTemplateConfig::EMPLOYEE_FIELD_KEYS);
+        $validated = $request->validate([
+            'logo.show' => 'required|boolean',
+            'qr.show' => 'required|boolean',
+            'header.title' => 'required|string|max:100',
+            'header.show_company_email' => 'required|boolean',
+            'header.show_company_phone' => 'required|boolean',
+            'footer.text' => 'required|string|max:500',
+            'sections.employee_info' => 'required|boolean',
+            'sections.leave' => 'required|boolean',
+            'sections.earnings_deductions' => 'required|boolean',
+            'sections.employer_contributions' => 'required|boolean',
+            'employee_fields' => 'required|array|size:10',
+            'employee_fields.*.key' => "required|string|distinct|in:{$allowedFields}",
+            'employee_fields.*.label' => 'required|string|max:80',
+            'employee_fields.*.show' => 'required|boolean',
+        ]);
+
+        $companyId = getCompanyId($user->id) ?? $user->id;
+        $config = PayslipTemplateConfig::normalize($validated);
+
+        updateSetting(
+            'payslip_template_config',
+            json_encode($config, JSON_UNESCAPED_SLASHES),
+            $companyId
+        );
+
+        \App\Models\AuditLog::record(
+            'system',
+            'system_change',
+            'Payslip Template',
+            'Payslip template configuration updated'
+        );
+
+        return redirect()->back()->with('success', __('Payslip template updated successfully.'));
+    }
+
     public function updateStatutoryRegistration(Request $request)
     {
         $user = $request->user();

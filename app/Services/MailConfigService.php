@@ -8,30 +8,28 @@ use Illuminate\Support\Facades\Config;
 
 class MailConfigService
 {
-    public static function setDynamicConfig()
+    public static function setDynamicConfig(?int $settingsOwnerId = null)
     {
-        $user = Auth::user();
-        if (!$user) {
-            return;
-        }
-        if (isSaas()) {
-            if ($user->type == 'superadmin') {
-                $user = User::where('type', 'superadmin')->first();
-            } else if ($user->type == 'company') {
-                $user = User::where('id', $user->created_by)->first();
-            } else {
-                $user = User::where('id', $user->created_by)->first();
-            }
+        if ($settingsOwnerId !== null) {
+            $user = User::find($settingsOwnerId);
         } else {
-            if ($user->type == 'company') {
-                $user = Auth::user();
-            } else {
-                $user = User::where('id', $user->created_by)->first();
+            $user = Auth::user();
+            if ($user && isSaas()) {
+                if ($user->type == 'superadmin') {
+                    $user = User::where('type', 'superadmin')->first();
+                } else {
+                    $user = User::find($user->created_by);
+                }
+            } elseif ($user && $user->type !== 'company') {
+                $user = User::find($user->created_by);
             }
+        }
+
+        if (! $user) {
+            return;
         }
 
         $getSettings = settings($user->id);
-
 
         $settings = [
             'driver' => $getSettings['email_driver'] ?? 'smtp',
@@ -41,9 +39,8 @@ class MailConfigService
             'password' => $getSettings['email_password'] ?? '',
             'encryption' => $getSettings['email_encryption'] ?? 'tls',
             'fromAddress' => $getSettings['email_from_address'] ?? 'noreply@example.com',
-            'fromName' => $getSettings['email_from_name'] ?? 'AfriPay HR System'
+            'fromName' => $getSettings['email_from_name'] ?? 'AfriPay HR System',
         ];
-
 
         Config::set([
             'mail.default' => $settings['driver'],
