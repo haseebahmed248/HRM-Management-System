@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -159,7 +160,7 @@ class EmployeeSalary extends BaseModel
      * and non-null in the stored component record, that value is used instead
      * of the component's default_amount / percentage_of_basic.
      */
-    public function calculateAllComponents()
+    public function calculateAllComponents(array $processingContext = [])
     {
         $normalisedComponents = $this->getNormalisedComponents();
         $componentIds         = array_column($normalisedComponents, 'id');
@@ -185,6 +186,7 @@ class EmployeeSalary extends BaseModel
         $totalEarnings   = $this->basic_salary;
         $totalDeductions = 0;
         $totalEmployerContributions = 0;
+        $totalNotionalPay = 0;
 
         foreach ($normalisedComponents as $entry) {
             $id        = (int) $entry['id'];
@@ -194,11 +196,20 @@ class EmployeeSalary extends BaseModel
                 continue;
             }
 
+            if (! $this->componentAppliesForPeriod($component, $processingContext)) {
+                continue;
+            }
+
             // Use the custom per-employee amount when provided, otherwise fall
             // back to the component's own calculation (percentage or fixed).
             $amount = array_key_exists($id, $customAmounts)
                 ? $customAmounts[$id]
                 : $component->calculateAmount($this->basic_salary);
+
+            $prorationFactor = $component->pro_rata_start_end
+                ? max(0.0, min(1.0, (float) ($processingContext['proration_factor'] ?? 1.0)))
+                : 1.0;
+            $amount = round((float) $amount * $prorationFactor, 2);
 
             $componentType = $component->componentType();
             $line = [
@@ -214,12 +225,23 @@ class EmployeeSalary extends BaseModel
                 'reduces_taxable_base' => $component->reducesTaxableBase(),
                 'increases_taxable_base' => $component->increasesTaxableBase(),
                 'is_cash' => $component->isCash(),
+                'is_notional' => (bool) $component->affect_notional_pay,
+                'affect_payslip' => (bool) $component->affect_payslip,
+                'print_on_payslip' => (bool) $component->print_on_payslip,
+                'pro_rata_start_end' => (bool) $component->pro_rata_start_end,
+                'proration_factor' => $prorationFactor,
+                'compulsory_deduction' => (bool) $component->compulsory_deduction,
+                'clear_totals' => $component->clear_totals,
             ];
             $componentLines[] = $line;
 
             if ($component->isEarning()) {
-                $earnings[$component->name] = $amount;
-                $totalEarnings += $amount;
+                if ($component->isCash()) {
+                    $earnings[$component->name] = $amount;
+                    $totalEarnings += $amount;
+                } else {
+                    $totalNotionalPay += $amount;
+                }
             } elseif ($component->isDeduction()) {
                 $deductions[$component->name] = $amount;
                 $totalDeductions += $amount;
@@ -238,8 +260,37 @@ class EmployeeSalary extends BaseModel
             'total_earnings'  => $totalEarnings,
             'total_deductions'=> $totalDeductions,
             'total_employer_contributions' => $totalEmployerContributions,
+            'total_notional_pay' => $totalNotionalPay,
             'gross_salary'    => $totalEarnings,
             'net_salary'      => $totalEarnings - $totalDeductions,
         ];
+    }
+
+    private function componentAppliesForPeriod(SalaryComponent $component, array $context): bool
+    {
+        if (empty($context['period_start']) || empty($context['period_end'])) {
+            return true;
+        }
+
+        $periodStart = Carbon::parse($context['period_start'])->startOfDay();
+        $periodEnd = Carbon::parse($context['period_end'])->endOfDay();
+        $effectiveFrom = $this->effective_from
+            ? Carbon::parse($this->effective_from)->startOfDay()
+            : Carbon::parse($this->created_at ?? $periodStart)->startOfDay();
+
+        if ($periodEnd->lt($effectiveFrom)) {
+            return false;
+        }
+
+        $monthIndex = (int) $effectiveFrom->copy()->startOfMonth()
+            ->diffInMonths($periodStart->copy()->startOfMonth(), false);
+        $monthIndex = max(0, $monthIndex);
+        $months = max(0, (int) ($component->delay_months ?? 0));
+
+        return match ($component->delay_type ?? 'none') {
+            'delay_for' => $monthIndex >= $months,
+            'use_for_next' => $monthIndex < $months,
+            default => true,
+        };
     }
 }

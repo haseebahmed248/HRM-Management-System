@@ -26,10 +26,16 @@
     $earningsList = [];
     foreach ($rawEarnings as $key => $value) {
         if (is_array($value) && isset($value['name'])) {
+            if (($value['print'] ?? true) === false) {
+                continue;
+            }
             if (\App\Support\ComponentType::isEmployerContributionLine($value)) {
                 continue;
             }
-            $earningsList[] = ['name' => $value['name'], 'amount' => $value['amount']];
+            $earningsList[] = [
+                'name' => $value['name'] . (($value['is_notional'] ?? false) ? ' (Notional)' : ''),
+                'amount' => $value['amount'],
+            ];
         } else {
             $earningsList[] = ['name' => $key, 'amount' => $value];
         }
@@ -38,7 +44,13 @@
     $deductionsList = [];
     foreach ($rawDeductions as $key => $value) {
         if (is_array($value) && isset($value['name'])) {
-            $deductionsList[] = ['name' => $value['name'], 'amount' => $value['amount']];
+            if (($value['print'] ?? true) === false) {
+                continue;
+            }
+            $deductionsList[] = [
+                'name' => $value['name'] . (($value['compulsory'] ?? false) ? ' (Compulsory)' : ''),
+                'amount' => $value['amount'],
+            ];
         } else {
             $deductionsList[] = ['name' => $key, 'amount' => $value];
         }
@@ -57,7 +69,9 @@
 
     $employerItems = [];
     foreach ($rawEarnings as $value) {
-        if (is_array($value) && \App\Support\ComponentType::isEmployerContributionLine($value)) {
+        if (is_array($value)
+            && ($value['print'] ?? true) !== false
+            && \App\Support\ComponentType::isEmployerContributionLine($value)) {
             $employerItems[] = $value;
         }
     }

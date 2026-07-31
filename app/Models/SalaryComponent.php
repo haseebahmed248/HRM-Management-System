@@ -18,6 +18,17 @@ class SalaryComponent extends BaseModel
         'percentage_of_basic',
         'is_taxable',
         'is_mandatory',
+        'affect_notional_pay',
+        'affect_payslip',
+        'print_on_payslip',
+        'pro_rata_start_end',
+        'compulsory_deduction',
+        'delay_type',
+        'delay_months',
+        'clear_totals',
+        'clear_specific_month',
+        'cycle_start_date',
+        'cycle_length_months',
         'status',
         'created_by',
     ];
@@ -28,6 +39,15 @@ class SalaryComponent extends BaseModel
         'type' => ComponentType::class,
         'is_taxable' => 'boolean',
         'is_mandatory' => 'boolean',
+        'affect_notional_pay' => 'boolean',
+        'affect_payslip' => 'boolean',
+        'print_on_payslip' => 'boolean',
+        'pro_rata_start_end' => 'boolean',
+        'compulsory_deduction' => 'boolean',
+        'delay_months' => 'integer',
+        'clear_specific_month' => 'integer',
+        'cycle_start_date' => 'date:Y-m-d',
+        'cycle_length_months' => 'integer',
     ];
 
     /**
@@ -84,7 +104,8 @@ class SalaryComponent extends BaseModel
 
     public function isCash(): bool
     {
-        return $this->componentType()->isCash();
+        return $this->componentType()->isCash()
+            && ! ($this->isEarning() && $this->affect_notional_pay);
     }
 
     /**

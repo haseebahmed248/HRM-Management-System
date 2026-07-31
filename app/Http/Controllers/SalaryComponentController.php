@@ -81,7 +81,7 @@ class SalaryComponentController extends Controller
     {
         $this->normalizeComponentType($request);
 
-        $validated = $request->validate([
+        $validated = $request->validate(array_merge([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'type' => ['required', Rule::enum(ComponentType::class)],
@@ -96,12 +96,13 @@ class SalaryComponentController extends Controller
             'is_taxable' => 'boolean',
             'is_mandatory' => 'boolean',
             'status' => 'nullable|in:active,inactive',
-        ]);
+        ], $this->processingRuleValidation()));
 
         $validated['created_by'] = creatorId();
         $validated['status'] = $validated['status'] ?? 'active';
         $validated['is_taxable'] = $validated['is_taxable'] ?? true;
         $validated['is_mandatory'] = $validated['is_mandatory'] ?? false;
+        $this->normaliseProcessingRules($validated);
 
         // Set default values based on calculation type
         // track-a/10: zambia_pension uses default_amount like 'fixed'.
@@ -139,7 +140,7 @@ class SalaryComponentController extends Controller
             try {
                 $this->normalizeComponentType($request);
 
-                $validated = $request->validate([
+                $validated = $request->validate(array_merge([
                     'name' => 'required|string|max:255',
                     'description' => 'nullable|string',
                     'type' => ['required', Rule::enum(ComponentType::class)],
@@ -152,7 +153,9 @@ class SalaryComponentController extends Controller
                     'is_taxable' => 'boolean',
                     'is_mandatory' => 'boolean',
                     'status' => 'nullable|in:active,inactive',
-                ]);
+                ], $this->processingRuleValidation()));
+
+                $this->normaliseProcessingRules($validated);
 
                 // Set default values based on calculation type
                 // track-a/10: zambia_pension uses default_amount like 'fixed'.
@@ -464,6 +467,45 @@ class SalaryComponentController extends Controller
 
         if ($type) {
             $request->merge(['type' => $type->value]);
+        }
+    }
+
+    private function processingRuleValidation(): array
+    {
+        return [
+            'affect_notional_pay' => 'sometimes|boolean',
+            'affect_payslip' => 'sometimes|boolean',
+            'print_on_payslip' => 'sometimes|boolean',
+            'pro_rata_start_end' => 'sometimes|boolean',
+            'compulsory_deduction' => 'sometimes|boolean',
+            'delay_type' => 'nullable|in:none,delay_for,use_for_next',
+            'delay_months' => 'nullable|required_if:delay_type,delay_for,use_for_next|integer|min:1|max:600',
+            'clear_totals' => 'nullable|in:year_end,never,specific_month,end_of_cycle',
+            'clear_specific_month' => 'nullable|required_if:clear_totals,specific_month|integer|between:1,12',
+            'cycle_start_date' => 'nullable|required_if:clear_totals,end_of_cycle|date',
+            'cycle_length_months' => 'nullable|required_if:clear_totals,end_of_cycle|integer|min:1|max:600',
+        ];
+    }
+
+    private function normaliseProcessingRules(array &$validated): void
+    {
+        $validated['affect_notional_pay'] = $validated['affect_notional_pay'] ?? false;
+        $validated['affect_payslip'] = $validated['affect_payslip'] ?? true;
+        $validated['print_on_payslip'] = $validated['print_on_payslip'] ?? true;
+        $validated['pro_rata_start_end'] = $validated['pro_rata_start_end'] ?? false;
+        $validated['compulsory_deduction'] = $validated['compulsory_deduction'] ?? false;
+        $validated['delay_type'] = $validated['delay_type'] ?? 'none';
+        $validated['clear_totals'] = $validated['clear_totals'] ?? 'year_end';
+
+        if ($validated['delay_type'] === 'none') {
+            $validated['delay_months'] = null;
+        }
+        if ($validated['clear_totals'] !== 'specific_month') {
+            $validated['clear_specific_month'] = null;
+        }
+        if ($validated['clear_totals'] !== 'end_of_cycle') {
+            $validated['cycle_start_date'] = null;
+            $validated['cycle_length_months'] = null;
         }
     }
 }

@@ -12,6 +12,10 @@ import { toast } from '@/components/custom-toast';
 import { useTranslation } from 'react-i18next';
 import { Pagination } from '@/components/ui/pagination';
 import { SearchAndFilterBar } from '@/components/ui/search-and-filter-bar';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 
 interface ComponentTypeOption {
   value: string;
@@ -558,7 +562,143 @@ export default function SalaryComponents() {
             { name: 'default_amount', label: t('Fixed Amount'), type: 'number' },
             { name: 'percentage_of_basic', label: t('Percentage of Basic'), type: 'number' },
             { name: 'is_taxable', label: t('Taxable (subject to PAYE)'), type: 'checkbox', defaultValue: true },
-            // { name: 'is_mandatory', label: t('Is Mandatory'), type: 'checkbox', defaultValue: false },
+            {
+              name: '_processing_rules',
+              label: t('Processing Rules'),
+              type: 'custom',
+              render: (_field, formData, onChange) => {
+                const toggles = [
+                  ['affect_notional_pay', t('Affect notional pay'), t('Include in PAYE taxable pay without adding cash to gross or net.')],
+                  ['affect_payslip', t('Include in payslip data'), t('Store this component in the payroll breakdown.'), true],
+                  ['print_on_payslip', t('Print on payslip'), t('Show the stored line on preview, print, and PDF.'), true],
+                  ['pro_rata_start_end', t('Pro-rate start and end'), t('Scale for employees joining or leaving during the pay period.')],
+                  ['compulsory_deduction', t('Compulsory deduction'), t('Apply the full deduction even when it makes net pay negative.')],
+                ] as const;
+
+                return (
+                  <div className="space-y-4 rounded-md border border-border bg-muted/15 p-3 sm:p-4">
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      {t('Control when the component is processed and how it appears in payroll records.')}
+                    </p>
+
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {toggles.map(([name, label, description, defaultValue]) => (
+                        <div key={name} className="flex min-h-20 items-start justify-between gap-3 rounded-md border bg-background p-3">
+                          <div className="min-w-0">
+                            <Label htmlFor={name} className="text-sm font-medium">{label}</Label>
+                            <p className="mt-1 text-xs leading-4 text-muted-foreground">{description}</p>
+                          </div>
+                          <Switch
+                            id={name}
+                            checked={Boolean(formData[name] ?? defaultValue ?? false)}
+                            onCheckedChange={(checked) => onChange(name, checked)}
+                            disabled={formMode === 'view'}
+                            className="shrink-0"
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>{t('Delay or duration')}</Label>
+                        <Select
+                          value={formData.delay_type ?? 'none'}
+                          onValueChange={(value) => onChange('delay_type', value)}
+                          disabled={formMode === 'view'}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">{t('No delay')}</SelectItem>
+                            <SelectItem value="delay_for">{t('Delay for')}</SelectItem>
+                            <SelectItem value="use_for_next">{t('Use for next')}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {formData.delay_type && formData.delay_type !== 'none' && (
+                        <div className="space-y-2">
+                          <Label htmlFor="delay_months">{t('Number of months')}</Label>
+                          <Input
+                            id="delay_months"
+                            type="number"
+                            min={1}
+                            max={600}
+                            value={formData.delay_months ?? ''}
+                            onChange={(event) => onChange('delay_months', event.target.value)}
+                            disabled={formMode === 'view'}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>{t('Clear running totals')}</Label>
+                        <Select
+                          value={formData.clear_totals ?? 'year_end'}
+                          onValueChange={(value) => onChange('clear_totals', value)}
+                          disabled={formMode === 'view'}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="year_end">{t('At year end')}</SelectItem>
+                            <SelectItem value="never">{t('Never')}</SelectItem>
+                            <SelectItem value="specific_month">{t('In a specific month')}</SelectItem>
+                            <SelectItem value="end_of_cycle">{t('At end of cycle')}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {formData.clear_totals === 'specific_month' && (
+                        <div className="space-y-2">
+                          <Label htmlFor="clear_specific_month">{t('Month')}</Label>
+                          <Select
+                            value={String(formData.clear_specific_month ?? '')}
+                            onValueChange={(value) => onChange('clear_specific_month', value)}
+                            disabled={formMode === 'view'}
+                          >
+                            <SelectTrigger id="clear_specific_month"><SelectValue placeholder={t('Select month')} /></SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 12 }, (_, index) => (
+                                <SelectItem key={index + 1} value={String(index + 1)}>
+                                  {new Date(2026, index, 1).toLocaleString(undefined, { month: 'long' })}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+
+                    {formData.clear_totals === 'end_of_cycle' && (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="cycle_start_date">{t('Cycle start date')}</Label>
+                          <Input
+                            id="cycle_start_date"
+                            type="date"
+                            value={formData.cycle_start_date ?? ''}
+                            onChange={(event) => onChange('cycle_start_date', event.target.value)}
+                            disabled={formMode === 'view'}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="cycle_length_months">{t('Cycle length (months)')}</Label>
+                          <Input
+                            id="cycle_length_months"
+                            type="number"
+                            min={1}
+                            max={600}
+                            value={formData.cycle_length_months ?? ''}
+                            onChange={(event) => onChange('cycle_length_months', event.target.value)}
+                            disabled={formMode === 'view'}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              },
+            },
             {
               name: 'status',
               label: t('Status'),
@@ -570,7 +710,7 @@ export default function SalaryComponents() {
               defaultValue: 'active'
             }
           ],
-          modalSize: 'lg'
+          modalSize: '2xl'
         }}
         initialData={currentItem}
         title={

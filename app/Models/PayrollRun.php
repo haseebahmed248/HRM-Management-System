@@ -213,7 +213,15 @@ class PayrollRun extends BaseModel
             );
         }
 
-        $salaryBreakdown = $employeeSalary->calculateAllComponents();
+        $salaryBreakdown = $employeeSalary->calculateAllComponents([
+            'period_start' => $this->pay_period_start,
+            'period_end' => $this->pay_period_end,
+            'proration_factor' => $this->componentProrationFactor(
+                $employee->id,
+                $employeeRecord?->date_of_joining,
+                $workingDaysIndices
+            ),
+        ]);
 
         $attendanceRecords = AttendanceRecord::where('employee_id', $employee->id)
             ->whereBetween('date', [$this->pay_period_start, $this->pay_period_end])
@@ -257,9 +265,18 @@ class PayrollRun extends BaseModel
         }
 
         $nonTaxableEarnings = 0.0;
+        $notionalTaxableEarnings = 0.0;
         foreach ($salaryBreakdown['component_lines'] ?? [] as $line) {
-            if (($line['is_earning'] ?? false) && ! ($line['is_taxable'] ?? true)) {
+            if (($line['is_earning'] ?? false)
+                && ($line['is_cash'] ?? true)
+                && ! ($line['is_taxable'] ?? true)) {
                 $nonTaxableEarnings += (float) $line['amount'];
+            }
+            if (($line['is_earning'] ?? false)
+                && ($line['is_notional'] ?? false)
+                && ($line['is_taxable'] ?? true)
+                && ($line['increases_taxable_base'] ?? false)) {
+                $notionalTaxableEarnings += (float) $line['amount'];
             }
         }
 
@@ -273,7 +290,8 @@ class PayrollRun extends BaseModel
             $exemptPaye,
             $nonTaxableEarnings,
             $exemptSdl,
-            $otherTaxDeductibleDeductions
+            $otherTaxDeductibleDeductions,
+            $notionalTaxableEarnings
         );
 
         // ────────────────────────────────────────────────────────────────────
@@ -282,15 +300,46 @@ class PayrollRun extends BaseModel
         // ────────────────────────────────────────────────────────────────────
 
         // Collect any salary-component deductions that are NOT statutory
-        $deductionsFromComponents = [];
+        $componentDeductionLines = [];
         foreach ($salaryBreakdown['component_lines'] ?? [] as $line) {
             if ($line['is_deduction'] ?? false) {
+                $componentDeductionLines[] = $line;
+            }
+        }
+
+        // Optional deductions are limited to the employee's remaining cash.
+        // Compulsory deductions are always applied in full and may make net pay
+        // negative. Recalculate PAYE when a pre-tax deduction is reduced.
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            $componentDeductionLines = $this->applyComponentDeductionLimits(
+                $salaryBreakdown['component_lines'] ?? [],
+                max(0.0, $grossPay - $zambia['total_deductions'])
+            );
+
+            [$pensionContribution, $otherTaxDeductibleDeductions] = $this->taxReliefFromComponentLines($componentDeductionLines);
+            $zambia = $zambiaService->calculateFullPayroll(
+                $grossPay,
+                $employeeSalary->basic_salary,
+                $exemptNapsa,
+                $exemptNhima,
+                $pensionContribution,
+                $exemptPaye,
+                $nonTaxableEarnings,
+                $exemptSdl,
+                $otherTaxDeductibleDeductions,
+                $notionalTaxableEarnings
+            );
+        }
+
+        $deductionsFromComponents = [];
+        foreach ($componentDeductionLines as $line) {
+            if ($line['affect_payslip'] ?? true) {
                 $deductionsFromComponents[] = $this->componentBreakdownLine($line);
             }
         }
 
         // Sum the additional component deductions
-        $additionalDeductionsTotal = collect($deductionsFromComponents)->sum('amount');
+        $additionalDeductionsTotal = collect($componentDeductionLines)->sum('amount');
 
         // ── FIXED: total deductions = statutory + component deductions ────────
         $totalDeductions = $zambia['total_deductions'] + $additionalDeductionsTotal;
@@ -301,7 +350,7 @@ class PayrollRun extends BaseModel
         // ── Build earnings breakdown ──────────────────────────────────────────
         $earningsFromComponents = [];
         foreach ($salaryBreakdown['component_lines'] ?? [] as $line) {
-            if ($line['is_earning'] ?? false) {
+            if (($line['is_earning'] ?? false) && ($line['affect_payslip'] ?? true)) {
                 $earningsFromComponents[] = $this->componentBreakdownLine($line);
             }
         }
@@ -309,7 +358,7 @@ class PayrollRun extends BaseModel
         // Only show NAPSA/NHIMA employer contributions if not exempt
         $employerContributions = [];
         foreach ($salaryBreakdown['component_lines'] ?? [] as $line) {
-            if ($line['is_employer_contribution'] ?? false) {
+            if (($line['is_employer_contribution'] ?? false) && ($line['affect_payslip'] ?? true)) {
                 $employerContributions[] = $this->componentBreakdownLine($line);
             }
         }
@@ -319,6 +368,7 @@ class PayrollRun extends BaseModel
                 'amount' => $zambia['napsa_employer'],
                 'type'   => 'zambia_napsa_employer',
                 'is_employer_contribution' => true,
+                'print' => true,
             ];
         }
         if (!$exemptNhima) {
@@ -327,6 +377,7 @@ class PayrollRun extends BaseModel
                 'amount' => $zambia['nhima_employer'],
                 'type'   => 'zambia_nhima_employer',
                 'is_employer_contribution' => true,
+                'print' => true,
             ];
         }
         // SDL: employer levy (0.5% of this employee's gross), shown as an
@@ -337,11 +388,12 @@ class PayrollRun extends BaseModel
                 'amount' => $zambia['sdl'],
                 'type'   => 'zambia_sdl',
                 'is_employer_contribution' => true,
+                'print' => true,
             ];
         }
 
         $earningsBreakdown = array_merge(
-            [['name' => 'Basic Salary', 'amount' => $employeeSalary->basic_salary, 'type' => 'basic_salary']],
+            [['name' => 'Basic Salary', 'amount' => $employeeSalary->basic_salary, 'type' => 'basic_salary', 'print' => true]],
             $earningsFromComponents,
             $employerContributions
         );
@@ -350,13 +402,14 @@ class PayrollRun extends BaseModel
         // Statutory deductions (skip if exempt)
         $statutoryDeductions = [];
         if (!$exemptPaye) {
-            $statutoryDeductions[] = ['name' => 'PAYE Tax', 'amount' => $zambia['paye'], 'type' => 'zambia_paye'];
+            $statutoryDeductions[] = ['name' => 'PAYE Tax', 'amount' => $zambia['paye'], 'type' => 'zambia_paye', 'print' => true];
         }
         if (!$exemptNapsa) {
             $statutoryDeductions[] = [
                 'name'   => 'NAPSA Employee',
                 'amount' => $zambia['napsa_employee'],
                 'type'   => 'zambia_napsa_employee',
+                'print'  => true,
             ];
         }
         if (!$exemptNhima) {
@@ -364,6 +417,7 @@ class PayrollRun extends BaseModel
                 'name'   => 'NHIMA Employee',
                 'amount' => $zambia['nhima_employee'],
                 'type'   => 'zambia_nhima_employee',
+                'print'  => true,
             ];
         }
 
@@ -406,7 +460,99 @@ class PayrollRun extends BaseModel
             'amount' => round((float) $line['amount'], 2),
             'type' => $line['type'],
             'is_employer_contribution' => (bool) ($line['is_employer_contribution'] ?? false),
+            'print' => (bool) ($line['print_on_payslip'] ?? true),
+            'is_notional' => (bool) ($line['is_notional'] ?? false),
+            'compulsory' => (bool) ($line['compulsory_deduction'] ?? false),
+            'requested_amount' => round((float) ($line['requested_amount'] ?? $line['amount']), 2),
         ];
+    }
+
+    private function applyComponentDeductionLimits(array $lines, float $availableCash): array
+    {
+        $applied = [];
+
+        foreach ($lines as $line) {
+            if (! ($line['is_deduction'] ?? false)) {
+                continue;
+            }
+
+            $requested = round(max(0.0, (float) ($line['requested_amount'] ?? $line['amount'] ?? 0)), 2);
+            $amount = ($line['compulsory_deduction'] ?? false)
+                ? $requested
+                : min($requested, max(0.0, $availableCash));
+
+            $line['requested_amount'] = $requested;
+            $line['amount'] = round($amount, 2);
+            $availableCash -= $amount;
+            $applied[] = $line;
+        }
+
+        return $applied;
+    }
+
+    private function taxReliefFromComponentLines(array $lines): array
+    {
+        $pension = 0.0;
+        $other = 0.0;
+
+        foreach ($lines as $line) {
+            if (! ($line['reduces_taxable_base'] ?? false)) {
+                continue;
+            }
+            if (($line['calculation_type'] ?? null) === 'zambia_pension') {
+                $pension += (float) $line['amount'];
+            } else {
+                $other += (float) $line['amount'];
+            }
+        }
+
+        return [$pension, $other];
+    }
+
+    private function componentProrationFactor(int $employeeId, $joinedOn, array $workingDays): float
+    {
+        $periodStart = $this->pay_period_start->copy()->startOfDay();
+        $periodEnd = $this->pay_period_end->copy()->startOfDay();
+        $employmentStart = $joinedOn ? \Carbon\Carbon::parse($joinedOn)->startOfDay() : $periodStart->copy();
+
+        $terminationDate = Termination::where('employee_id', $employeeId)
+            ->where('status', 'completed')
+            ->whereIn('created_by', getCompanyAndUsersId())
+            ->whereDate('termination_date', '<=', $periodEnd)
+            ->max('termination_date');
+        $resignationDate = Resignation::where('employee_id', $employeeId)
+            ->whereIn('status', ['approved', 'completed'])
+            ->whereIn('created_by', getCompanyAndUsersId())
+            ->whereDate('last_working_day', '<=', $periodEnd)
+            ->max('last_working_day');
+
+        $employmentEnd = collect([$terminationDate, $resignationDate])
+            ->filter()
+            ->map(fn ($date) => \Carbon\Carbon::parse($date)->startOfDay())
+            ->sortBy(fn ($date) => $date->timestamp)
+            ->first() ?? $periodEnd->copy();
+
+        $eligibleStart = $employmentStart->greaterThan($periodStart) ? $employmentStart : $periodStart;
+        $eligibleEnd = $employmentEnd->lessThan($periodEnd) ? $employmentEnd : $periodEnd;
+        $scheduled = $this->countScheduledDays($periodStart, $periodEnd, $workingDays);
+
+        if ($eligibleStart->greaterThan($eligibleEnd) || $scheduled === 0) {
+            return 0.0;
+        }
+
+        return min(1.0, $this->countScheduledDays($eligibleStart, $eligibleEnd, $workingDays) / $scheduled);
+    }
+
+    private function countScheduledDays($start, $end, array $workingDays): int
+    {
+        $count = 0;
+        for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+            if (in_array((int) $date->format('w'), $workingDays, true)) {
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     // ─── Leave Data ──────────────────────────────────────────────────────────
