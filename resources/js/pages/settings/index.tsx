@@ -43,6 +43,7 @@ import PaymentSettings from './components/payment-settings';
 import RecaptchaSettings from './components/recaptcha-settings';
 import SeoSettings from './components/seo-settings';
 import StorageSettings from './components/storage-settings';
+import StatutoryRegistrationSettings from './components/statutory-registration-settings';
 import SystemSettings from './components/system-settings';
 import WorkingDaysSettings from './components/working-days-settings';
 import ZambiaTaxSettings from './components/zambia-tax-settings';
@@ -471,7 +472,10 @@ export default function Settings() {
                         auth.user?.type === 'superadmin' ||
                         auth.permissions?.includes('manage-zambia-tax-settings')) && (
                         <section id="zambia-tax-settings" ref={zambiaTaxSettingsRef} className="mb-8">
-                            <ZambiaTaxSettings settings={zambiaTaxSettings} canEdit={auth.user?.type === 'superadmin'} />
+                            <div className="space-y-6">
+                                {auth.user?.type === 'company' && <StatutoryRegistrationSettings settings={systemSettings} />}
+                                <ZambiaTaxSettings settings={zambiaTaxSettings} canEdit={auth.user?.type === 'superadmin'} />
+                            </div>
                         </section>
                     )}
 

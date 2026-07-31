@@ -985,6 +985,10 @@ if (! function_exists('defaultSettings')) {
             'working_days_per_month' => 22,
             'working_days' => '[1,2,3,4,5]',
 
+            'employer_napsa_number' => '',
+            'company_nhima_number' => '',
+            'employer_tpin' => '',
+
             'metaKeywords' => $productName.' - All-in-One HR Management Software',
             'metaDescription' => 'Simplify employee management, payroll, attendance, recruitment, and performance with '.$productName.' — a modern HR management platform.',
             'metaImage' => 'seo/seo-banner.jpg',

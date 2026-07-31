@@ -10,6 +10,7 @@ use App\Models\PayrollEntry;
 use App\Models\PayrollRun;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -20,6 +21,8 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class ZambiaReportController extends Controller
 {
+    private const PAYE_EMPLOYMENT_NATURE = 'Primary';
+
     // ─── Index Page ──────────────────────────────────────────────────────────
 
     public function index(Request $request)
@@ -248,6 +251,141 @@ class ZambiaReportController extends Controller
         }
 
         return $this->exportSections($format, 'NHIMA_Report_' . $run->pay_period_start->format('M_Y'), $sections);
+    }
+
+    // ─── Statutory Portal Import Formats ────────────────────────────────────
+
+    public function napsaImportFormat(Request $request)
+    {
+        $request->validate(['payroll_run_id' => 'required|exists:payroll_runs,id']);
+
+        $run       = $this->getPayrollRun($request->payroll_run_id);
+        $entries   = $this->getFilteredEntries($request->payroll_run_id, $request);
+        $format    = $request->input('format', 'csv');
+        $companyId = getCompanyId(auth()->id()) ?? auth()->id();
+
+        $rows = $entries->map(function (PayrollEntry $entry) use ($run, $companyId) {
+            $employee = $entry->employee?->employee;
+
+            return [
+                getSetting('employer_napsa_number', '', $companyId),
+                $run->pay_period_start->format('Y'),
+                $run->pay_period_start->format('m'),
+                $employee?->napsa_number ?? '',
+                $employee?->nrc ?? $employee?->passport_no ?? '',
+                $employee?->last_name ?? '',
+                $employee?->first_name ?? '',
+                $employee?->middle_name ?? '',
+                $this->formatImportDate($employee?->date_of_birth),
+                number_format((float) $entry->gross_pay, 2, '.', ''),
+                number_format($this->getDeductionAmount($entry, 'zambia_napsa_employee'), 2, '.', ''),
+                number_format($this->getEarningAmount($entry, 'zambia_napsa_employer'), 2, '.', ''),
+            ];
+        })->toArray();
+
+        $sections = [
+            ['type' => 'title', 'content' => 'NAPSA Import Format'],
+            ['type' => 'info', 'rows' => [['Month', $run->pay_period_start->format('F Y')]]],
+            ['type' => 'blank'],
+            ['type' => 'table',
+                'headers' => [
+                    'Account Number (Employer Napsa Number)', 'Year', 'Month', 'SSN', 'NRC',
+                    'Surname', 'First Name', 'Other Names', 'Date Of Birth', 'Gross Pay (ZMW)',
+                    'Employee Contribution 5%', 'Employer Contribution 5%',
+                ],
+                'rows' => $rows,
+            ],
+        ];
+
+        return $this->exportSections($format, 'NAPSA_Import_Format_' . $run->pay_period_start->format('M_Y'), $sections);
+    }
+
+    public function nhimaImportFormat(Request $request)
+    {
+        $request->validate(['payroll_run_id' => 'required|exists:payroll_runs,id']);
+
+        $run       = $this->getPayrollRun($request->payroll_run_id);
+        $entries   = $this->getFilteredEntries($request->payroll_run_id, $request);
+        $format    = $request->input('format', 'csv');
+        $companyId = getCompanyId(auth()->id()) ?? auth()->id();
+
+        $rows = $entries->map(function (PayrollEntry $entry) use ($run, $companyId) {
+            $employee = $entry->employee?->employee;
+
+            return [
+                getSetting('company_nhima_number', '', $companyId),
+                $run->pay_period_start->format('Y'),
+                $run->pay_period_start->format('m'),
+                $employee?->nhima_number ?? '',
+                $employee?->nrc ?? $employee?->passport_no ?? '',
+                $employee?->last_name ?? '',
+                $employee?->first_name ?? '',
+                $employee?->middle_name ?? '',
+                $this->formatImportDate($employee?->date_of_birth),
+                number_format((float) $entry->basic_salary, 2, '.', ''),
+                number_format($this->getDeductionAmount($entry, 'zambia_nhima_employee'), 2, '.', ''),
+                number_format($this->getEarningAmount($entry, 'zambia_nhima_employer'), 2, '.', ''),
+            ];
+        })->toArray();
+
+        $sections = [
+            ['type' => 'title', 'content' => 'NHIMA Import Format'],
+            ['type' => 'info', 'rows' => [['Month', $run->pay_period_start->format('F Y')]]],
+            ['type' => 'blank'],
+            ['type' => 'table',
+                'headers' => [
+                    'Nhima(Company)', 'Year', 'Month', 'Nhima No (Employee)', 'NRC NO',
+                    'Surname', 'First Name', 'Others Names', 'Date of Birth', 'Basic',
+                    'Employee Contribution 1%', 'Employer Contribution 1%',
+                ],
+                'rows' => $rows,
+            ],
+        ];
+
+        return $this->exportSections($format, 'NHIMA_Import_Format_' . $run->pay_period_start->format('M_Y'), $sections);
+    }
+
+    public function payeImportFormat(Request $request)
+    {
+        $request->validate(['payroll_run_id' => 'required|exists:payroll_runs,id']);
+
+        $run     = $this->getPayrollRun($request->payroll_run_id);
+        $entries = $this->getFilteredEntries($request->payroll_run_id, $request);
+        $format  = $request->input('format', 'csv');
+
+        $rows = $entries->map(function (PayrollEntry $entry) {
+            $employee = $entry->employee?->employee;
+
+            // TODO: Persist paye_taxable_gross on payroll_entries. Until then,
+            // the import uses gross pay as the best available taxable base.
+            $chargeableEmoluments = (float) $entry->gross_pay;
+
+            return [
+                $employee?->tpin ?? '',
+                $this->employeeFullName($entry),
+                self::PAYE_EMPLOYMENT_NATURE,
+                number_format((float) $entry->gross_pay, 2, '.', ''),
+                number_format($chargeableEmoluments, 2, '.', ''),
+                number_format(0, 2, '.', ''),
+                number_format($this->getDeductionAmount($entry, 'zambia_paye'), 2, '.', ''),
+                number_format(0, 2, '.', ''),
+            ];
+        })->toArray();
+
+        $sections = [
+            ['type' => 'title', 'content' => 'PAYE Import Format'],
+            ['type' => 'info', 'rows' => [['Month', $run->pay_period_start->format('F Y')]]],
+            ['type' => 'blank'],
+            ['type' => 'table',
+                'headers' => [
+                    'tpin', 'fullName', 'employmentNature', 'grossEmoluments',
+                    'chargeableEmoluments', 'totalTaxCredit', 'taxDeducted', 'taxAdjusted',
+                ],
+                'rows' => $rows,
+            ],
+        ];
+
+        return $this->exportSections($format, 'PAYE_Import_Format_' . $run->pay_period_start->format('M_Y'), $sections);
     }
 
     // ─── Report 4 — Bank Payment Schedule ───────────────────────────────────
@@ -1164,11 +1302,44 @@ class ZambiaReportController extends Controller
      */
     private function exportSections(string $format, string $baseName, array $sections): mixed
     {
+        $sections = $this->withStandardReportFrame($sections);
+
         return match ($format) {
             'excel' => $this->exportSectionsExcel($baseName . '.xlsx', $sections),
             'pdf'   => $this->exportSectionsPdf($baseName . '.pdf', $sections),
             default => $this->exportSectionsCsv($baseName . '.csv', $sections),
         };
+    }
+
+    /** Add the same identity and preparation details to every report format. */
+    private function withStandardReportFrame(array $sections): array
+    {
+        $reportName = 'Report';
+        foreach ($sections as $index => $section) {
+            if (($section['type'] ?? null) === 'title') {
+                $reportName = (string) ($section['content'] ?? $reportName);
+                unset($sections[$index]);
+                break;
+            }
+        }
+
+        $companyId   = getCompanyId(auth()->id()) ?? auth()->id();
+        $company     = User::find($companyId);
+        $companyName = $company?->name ?: getSetting('titleText', 'AfriPay HR', $companyId);
+
+        return [
+            ['type' => 'info', 'rows' => [
+                ['Company Name', $companyName],
+                ['Report Name', $reportName],
+            ]],
+            ...array_values($sections),
+            ['type' => 'blank'],
+            ['type' => 'info', 'rows' => [
+                ['Registered to:', $companyName],
+                ['Prepared by:', auth()->user()?->name ?? ''],
+                ['Date Prepared:', now()->format('d M Y')],
+            ]],
+        ];
     }
 
     // ─── CSV ─────────────────────────────────────────────────────────────────
@@ -1395,6 +1566,23 @@ class ZambiaReportController extends Controller
     // ════════════════════════════════════════════════════════════════════════════
     // ─── QUERY HELPERS ───────────────────────────────────────────────────────
     // ════════════════════════════════════════════════════════════════════════════
+
+    private function formatImportDate($date): string
+    {
+        return $date ? Carbon::parse($date)->format('Y-m-d') : '';
+    }
+
+    private function employeeFullName(PayrollEntry $entry): string
+    {
+        $employee = $entry->employee?->employee;
+        $name = trim(implode(' ', array_filter([
+            $employee?->first_name,
+            $employee?->middle_name,
+            $employee?->last_name,
+        ], fn($part) => filled($part))));
+
+        return $name ?: ($entry->employee?->name ?? $entry->employee_name ?? '');
+    }
 
     private function getPayrollRun($id): PayrollRun
     {

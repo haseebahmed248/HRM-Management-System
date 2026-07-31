@@ -13,6 +13,37 @@ use Illuminate\Support\Facades\Storage;
 
 class SystemSettingsController extends Controller
 {
+    public function updateStatutoryRegistration(Request $request)
+    {
+        $user = $request->user();
+        if ($user->type !== 'company') {
+            return redirect()->back()->with('error', __('Only company administrators can update statutory registration details.'));
+        }
+
+        $validated = $request->validate([
+            'employer_napsa_number' => 'nullable|string|max:100',
+            'company_nhima_number' => 'nullable|string|max:100',
+            'employer_tpin' => 'nullable|string|max:100',
+        ]);
+
+        $companyId = getCompanyId($user->id) ?? $user->id;
+
+        \DB::transaction(function () use ($validated, $companyId) {
+            foreach ($validated as $key => $value) {
+                updateSetting($key, trim((string) ($value ?? '')), $companyId);
+            }
+        });
+
+        \App\Models\AuditLog::record(
+            'system',
+            'system_change',
+            'Statutory Registration',
+            'Company statutory registration details updated'
+        );
+
+        return redirect()->back()->with('success', __('Statutory registration details updated successfully.'));
+    }
+
     public function updateWorkingDays(Request $request)
     {
         $user = $request->user();

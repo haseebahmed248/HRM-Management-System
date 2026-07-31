@@ -156,7 +156,7 @@ export default function ZambiaTaxSettings({ settings, canEdit = true }: ZambiaTa
       {/* PAYE Tax Slabs */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-base font-semibold">{t('PAYE Tax Slabs (Monthly ZMW)')}</CardTitle>
             <span className="text-xs text-muted-foreground">{t('Progressive income tax — ZRA official bands')}</span>
           </div>
@@ -164,14 +164,14 @@ export default function ZambiaTaxSettings({ settings, canEdit = true }: ZambiaTa
         <CardContent className="space-y-0 divide-y divide-border">
           {slabs.map((slab, index) => (
             <div key={slab.rateKey} className="py-4 first:pt-0 last:pb-0">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{slab.label}</span>
                 <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${slab.badgeColor}`}>
                   {slab.badge}
                 </span>
                 <span className="text-xs text-muted-foreground">— {slab.hint}</span>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <Field
                   label={t('Min (ZMW)')}
                   fieldKey={slab.minKey}
@@ -205,7 +205,7 @@ export default function ZambiaTaxSettings({ settings, canEdit = true }: ZambiaTa
       {/* NAPSA */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-base font-semibold">{t('NAPSA Settings')}</CardTitle>
             <span className="text-xs text-muted-foreground">{t('National Pension Scheme Authority')}</span>
           </div>
@@ -250,7 +250,7 @@ export default function ZambiaTaxSettings({ settings, canEdit = true }: ZambiaTa
       {/* NHIMA */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-base font-semibold">{t('NHIMA Settings')}</CardTitle>
             <span className="text-xs text-muted-foreground">{t('National Health Insurance Management Authority')}</span>
           </div>
@@ -286,7 +286,7 @@ export default function ZambiaTaxSettings({ settings, canEdit = true }: ZambiaTa
       {/* SDL */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-base font-semibold">{t('SDL Settings')}</CardTitle>
             <span className="text-xs text-muted-foreground">{t('Skills Development Levy')}</span>
           </div>
@@ -315,7 +315,7 @@ export default function ZambiaTaxSettings({ settings, canEdit = true }: ZambiaTa
       {/* track-a/10: Pension Tax Relief */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-base font-semibold">{t('Pension Tax Relief')}</CardTitle>
             <span className="text-xs text-muted-foreground">{t('PAYE offset for employee pension contributions')}</span>
           </div>
@@ -342,7 +342,7 @@ export default function ZambiaTaxSettings({ settings, canEdit = true }: ZambiaTa
       </Card>
 
       {/* Submit */}
-      <div className="flex items-center justify-between pt-2">
+      <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           {saved && (
             <span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
@@ -358,7 +358,7 @@ export default function ZambiaTaxSettings({ settings, canEdit = true }: ZambiaTa
           )}
         </div>
         {!ro && (
-          <Button type="submit" disabled={isSubmitting} className="min-w-40">
+          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto sm:min-w-40">
             {isSubmitting ? (
               <span className="flex items-center gap-2">
                 <span className="h-3.5 w-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

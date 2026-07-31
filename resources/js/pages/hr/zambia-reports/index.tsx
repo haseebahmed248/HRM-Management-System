@@ -182,14 +182,29 @@ export default function ZambiaReports() {
             description: t('Employee TPIN, gross salary and PAYE deducted. Submit to ZRA.'),
         },
         {
+            key:         'hr.zambia-reports.paye-import-format',
+            title:       t('PAYE Import Format'),
+            description: t('Portal-ready employee emoluments and PAYE deduction file.'),
+        },
+        {
             key:         'hr.zambia-reports.napsa-schedule',
             title:       t('NAPSA Schedule'),
             description: t('NAPSA numbers, gross salary, employee & employer contributions.'),
         },
         {
+            key:         'hr.zambia-reports.napsa-import-format',
+            title:       t('NAPSA Import Format'),
+            description: t('Portal-ready NAPSA employee and employer contribution file.'),
+        },
+        {
             key:         'hr.zambia-reports.nhima-report',
             title:       t('NHIMA Report'),
             description: t('NHIMA numbers, gross salary, employee & employer contributions.'),
+        },
+        {
+            key:         'hr.zambia-reports.nhima-import-format',
+            title:       t('NHIMA Import Format'),
+            description: t('Portal-ready NHIMA employee and employer contribution file.'),
         },
         {
             key:         'hr.zambia-reports.bank-schedule',
@@ -251,7 +266,7 @@ export default function ZambiaReports() {
             variant="outline"
             disabled={disabled || loading === routeKey}
             onClick={() => !disabled && onDownload()}
-            className="shrink-0 min-w-[110px]"
+            className="w-full shrink-0 sm:w-auto sm:min-w-[110px]"
         >
             {loading === routeKey ? (
                 <span className="flex items-center gap-1.5">
@@ -282,7 +297,7 @@ export default function ZambiaReports() {
             }]}
             noPadding
         >
-            <div className="p-6 space-y-8">
+            <div className="space-y-8 p-4 sm:p-6">
 
                 {/* ── NAPSA / NHIMA Contributory History ──────────────────── */}
                 <div>
@@ -291,7 +306,7 @@ export default function ZambiaReports() {
                     </h2>
                     <Card>
                         <CardContent className="pt-5 pb-4">
-                            <div className="flex flex-wrap items-end justify-between gap-4">
+                            <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm text-muted-foreground mb-3">
                                         {t('Monthly contribution history for every employee across all completed payroll runs for the selected year.')}
@@ -349,7 +364,7 @@ export default function ZambiaReports() {
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    className="min-w-[110px]"
+                                    className="w-full sm:w-auto sm:min-w-[110px]"
                                     disabled={loading === 'hr.zambia-reports.contributory-history'}
                                     onClick={() => postDownload('hr.zambia-reports.contributory-history', {
                                         type:          historyType,
@@ -488,7 +503,7 @@ export default function ZambiaReports() {
                                 {statutoryReports.map((report, idx) => (
                                     <div
                                         key={report.key}
-                                        className={`flex items-center justify-between gap-4 px-5 py-4 ${idx % 2 === 0 ? '' : 'bg-muted/30'}`}
+                                        className={`flex flex-col items-stretch justify-between gap-4 px-4 py-4 sm:flex-row sm:items-center sm:px-5 ${idx % 2 === 0 ? '' : 'bg-muted/30'}`}
                                     >
                                         <div className="flex items-start gap-3 flex-1 min-w-0">
                                             <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
@@ -596,7 +611,7 @@ export default function ZambiaReports() {
                                 {employeeReports.map((report, idx) => (
                                     <div
                                         key={report.key}
-                                        className={`flex items-center justify-between gap-4 px-5 py-4 ${idx % 2 === 0 ? '' : 'bg-muted/30'}`}
+                                        className={`flex flex-col items-stretch justify-between gap-4 px-4 py-4 sm:flex-row sm:items-center sm:px-5 ${idx % 2 === 0 ? '' : 'bg-muted/30'}`}
                                     >
                                         <div className="flex items-start gap-3 flex-1 min-w-0">
                                             <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />

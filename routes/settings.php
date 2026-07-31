@@ -126,6 +126,8 @@ Route::middleware(['auth', 'verified', 'plan.access'])->group(function () {
 Route::post('settings/zambia-tax/update',
     [\App\Http\Controllers\Settings\ZambiaTaxSettingController::class, 'update']
 )->name('settings.zambia-tax.update');
+    Route::post('settings/statutory-registration/update', [SystemSettingsController::class, 'updateStatutoryRegistration'])
+        ->name('settings.statutory-registration.update');
 
     // Financial Year Settings routes
     Route::middleware('permission:manage-payroll-settings')->group(function () {
@@ -163,6 +165,12 @@ Route::post('settings/zambia-tax/update',
             ->name('hr.zambia-reports.napsa-schedule');
         Route::get('hr/zambia-reports/nhima-report', [\App\Http\Controllers\ZambiaReportController::class, 'nhimaReport'])
             ->name('hr.zambia-reports.nhima-report');
+        Route::get('hr/zambia-reports/napsa-import-format', [\App\Http\Controllers\ZambiaReportController::class, 'napsaImportFormat'])
+            ->name('hr.zambia-reports.napsa-import-format');
+        Route::get('hr/zambia-reports/nhima-import-format', [\App\Http\Controllers\ZambiaReportController::class, 'nhimaImportFormat'])
+            ->name('hr.zambia-reports.nhima-import-format');
+        Route::get('hr/zambia-reports/paye-import-format', [\App\Http\Controllers\ZambiaReportController::class, 'payeImportFormat'])
+            ->name('hr.zambia-reports.paye-import-format');
         Route::get('hr/zambia-reports/bank-schedule', [\App\Http\Controllers\ZambiaReportController::class, 'bankSchedule'])
             ->name('hr.zambia-reports.bank-schedule');
         Route::get('hr/zambia-reports/payroll-summary', [\App\Http\Controllers\ZambiaReportController::class, 'payrollSummary'])
