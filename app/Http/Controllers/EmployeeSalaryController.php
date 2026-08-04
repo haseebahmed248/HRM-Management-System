@@ -156,9 +156,20 @@ class EmployeeSalaryController extends Controller
                     $ids = array_column($normalised, 'id');
                     $components = SalaryComponent::whereIn('id', $ids)
                         ->whereIn('created_by', getCompanyAndUsersId())
-                        ->get(['id', 'name', 'type']);
+                        ->get(['id', 'name', 'type', 'calculation_type']);
                     $salary->component_names = $components->pluck('name')->toArray();
-                    $salary->component_types = $components->pluck('type')->toArray();
+                    // Send the payroll bucket (earning/employer/deduction) rather than
+                    // the raw component type so the UI badge can't drift when new
+                    // component types are added (e.g. income/benefit/leave are earnings).
+                    $salary->component_types = $components->map(function (SalaryComponent $c) {
+                        if ($c->isEarning()) {
+                            return 'earning';
+                        }
+                        if ($c->isEmployerContribution()) {
+                            return 'employer';
+                        }
+                        return 'deduction';
+                    })->toArray();
                 } else {
                     $salary->component_names = [];
                     $salary->component_types = [];

@@ -321,6 +321,8 @@ export default function EmployeeSalaries() {
                 className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
                   types[i] === 'earning'
                     ? 'bg-green-50 text-green-700 ring-green-700/10'
+                    : types[i] === 'employer'
+                    ? 'bg-blue-50 text-blue-700 ring-blue-700/10'
                     : 'bg-red-50 text-red-700 ring-red-700/10'
                 }`}
               >
@@ -535,7 +537,8 @@ export default function EmployeeSalaries() {
                       (sc) => String(sc.id) === String(entry.id)
                     );
                     const label    = comp?.name ?? `Component #${entry.id}`;
-                    const ctype    = comp?.type ?? 'earning';
+                    const isEarning  = comp?.is_earning ?? true;
+                    const isEmployer = comp?.is_employer_contribution ?? false;
                     const defLabel = comp ? componentDefaultLabel(comp) : '—';
                     const isInactive = comp?.status === 'inactive';
 
@@ -547,11 +550,13 @@ export default function EmployeeSalaries() {
                         <div className="flex flex-col min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className={`shrink-0 inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold ${
-                              ctype === 'earning'
+                              isEarning
                                 ? 'bg-green-100 text-green-700'
+                                : isEmployer
+                                ? 'bg-blue-100 text-blue-700'
                                 : 'bg-red-100 text-red-700'
                             }`}>
-                              {ctype === 'earning' ? t('Earning') : t('Deduction')}
+                              {isEarning ? t('Earning') : isEmployer ? t('Employer') : t('Deduction')}
                             </span>
                             <span className="text-sm font-medium truncate">{label}</span>
                             {isInactive && (
