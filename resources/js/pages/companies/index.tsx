@@ -34,6 +34,7 @@ export default function Companies() {
   const [startDate, setStartDate] = useState<Date | undefined>(pageFilters.start_date ? new Date(pageFilters.start_date) : undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(pageFilters.end_date ? new Date(pageFilters.end_date) : undefined);
   const [selectedStatus, setSelectedStatus] = useState(pageFilters.status || 'all');
+  const [selectedActivity, setSelectedActivity] = useState(pageFilters.activity || 'all');
   const [showFilters, setShowFilters] = useState(false);
 
   // Modal state
@@ -50,12 +51,13 @@ export default function Companies() {
 
   // Check if any filters are active
   const hasActiveFilters = () => {
-    return selectedStatus !== 'all' || searchTerm !== '' || startDate !== undefined || endDate !== undefined;
+    return selectedStatus !== 'all' || selectedActivity !== 'all' || searchTerm !== '' || startDate !== undefined || endDate !== undefined;
   };
 
   // Count active filters
   const activeFilterCount = () => {
     return (selectedStatus !== 'all' ? 1 : 0) +
+      (selectedActivity !== 'all' ? 1 : 0) +
       (searchTerm ? 1 : 0) +
       (startDate ? 1 : 0) +
       (endDate ? 1 : 0);
@@ -77,6 +79,10 @@ export default function Companies() {
       params.status = selectedStatus;
     }
 
+    if (selectedActivity !== 'all') {
+      params.activity = selectedActivity;
+    }
+
     if (startDate) {
       params.start_date = startDate.toISOString().split('T')[0];
     }
@@ -94,6 +100,22 @@ export default function Companies() {
     router.get(route('companies.index'), params, { preserveState: true, preserveScroll: true });
   };
 
+  const handleActivityFilter = (value: string) => {
+    setSelectedActivity(value);
+
+    const params: any = { page: 1 };
+
+    if (searchTerm) params.search = searchTerm;
+    if (selectedStatus !== 'all') params.status = selectedStatus;
+    if (value !== 'all') params.activity = value;
+    if (startDate) params.start_date = startDate.toISOString().split('T')[0];
+    if (endDate) params.end_date = endDate.toISOString().split('T')[0];
+    if (pageFilters.per_page) params.per_page = pageFilters.per_page;
+
+    params.view = activeView;
+    router.get(route('companies.index'), params, { preserveState: true, preserveScroll: true });
+  };
+
   const handleStatusFilter = (value: string) => {
     setSelectedStatus(value);
 
@@ -105,6 +127,10 @@ export default function Companies() {
 
     if (value !== 'all') {
       params.status = value;
+    }
+
+    if (selectedActivity !== 'all') {
+      params.activity = selectedActivity;
     }
 
     if (startDate) {
@@ -140,6 +166,10 @@ export default function Companies() {
 
     if (selectedStatus !== 'all') {
       params.status = selectedStatus;
+    }
+
+    if (selectedActivity !== 'all') {
+      params.activity = selectedActivity;
     }
 
     if (startDate) {
@@ -353,6 +383,7 @@ export default function Companies() {
     const params: any = { page: pageNum, view: activeView };
     if (searchTerm) params.search = searchTerm;
     if (selectedStatus !== 'all') params.status = selectedStatus;
+    if (selectedActivity !== 'all') params.activity = selectedActivity;
     if (startDate) params.start_date = startDate.toISOString().split('T')[0];
     if (endDate) params.end_date = endDate.toISOString().split('T')[0];
     if (pageFilters.per_page) params.per_page = pageFilters.per_page;
@@ -363,6 +394,7 @@ export default function Companies() {
 
   const handleResetFilters = () => {
     setSelectedStatus('all');
+    setSelectedActivity('all');
     setSearchTerm('');
     setStartDate(undefined);
     setEndDate(undefined);
@@ -489,6 +521,26 @@ export default function Companies() {
       )
     },
     {
+      key: 'has_activity',
+      label: t('Activity'),
+      render: (_value: boolean, row: any) => (
+        row.has_activity ? (
+          <div className="flex flex-col">
+            <span className="inline-flex w-fit items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+              {t('Onboarded')}
+            </span>
+            <span className="mt-0.5 text-xs text-muted-foreground">
+              {row.employee_count} {t('employees')}
+            </span>
+          </div>
+        ) : (
+          <span className="inline-flex w-fit items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+            {t('No activity')}
+          </span>
+        )
+      )
+    },
+    {
       key: 'created_at',
       label: t('Created At'),
       sortable: true,
@@ -521,6 +573,18 @@ export default function Companies() {
                 { value: 'all', label: t('All Status') },
                 { value: 'active', label: t('Active') },
                 { value: 'inactive', label: t('Inactive') }
+              ]
+            },
+            {
+              name: 'activity',
+              label: t('Activity'),
+              type: 'select',
+              value: selectedActivity,
+              onChange: handleActivityFilter,
+              options: [
+                { value: 'all', label: t('All') },
+                { value: 'active', label: t('Onboarded (has payroll/employees)') },
+                { value: 'none', label: t('No activity (self-registered)') }
               ]
             },
             {

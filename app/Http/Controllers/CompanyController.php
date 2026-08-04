@@ -32,6 +32,23 @@ class CompanyController extends Controller
             $query->where('status', $request->status);
         }
 
+        // Apply activity filter — distinguishes onboarded companies (have
+        // employees or payroll runs) from empty self-registered accounts.
+        if ($request->filled('activity') && $request->activity !== 'all') {
+            $hasEmployees = fn ($sub) => $sub->select(\DB::raw(1))
+                ->from('employees')->whereColumn('employees.created_by', 'users.id');
+            $hasRuns = fn ($sub) => $sub->select(\DB::raw(1))
+                ->from('payroll_runs')->whereColumn('payroll_runs.created_by', 'users.id');
+
+            if ($request->activity === 'active') {
+                $query->where(function ($q) use ($hasEmployees, $hasRuns) {
+                    $q->whereExists($hasEmployees)->orWhereExists($hasRuns);
+                });
+            } elseif ($request->activity === 'none') {
+                $query->whereNotExists($hasEmployees)->whereNotExists($hasRuns);
+            }
+        }
+
         // Apply date filters
         if ($request->has('start_date') && !empty($request->start_date)) {
             $query->whereDate('created_at', '>=', $request->start_date);
@@ -52,15 +69,23 @@ class CompanyController extends Controller
 
         // Transform data for frontend
         $companies->getCollection()->transform(function ($company) {
+            $employeeCount = \App\Models\Employee::where('created_by', $company->id)->count();
+            $payrollRunCount = \App\Models\PayrollRun::where('created_by', $company->id)->count();
+
             return [
                 'id' => $company->id,
                 'avatar' => check_file($company->avatar) ? get_file($company->avatar) : get_file('avatars/avatar.png'),
-                'name' => $company->name, 
+                'name' => $company->name,
                 'email' => $company->email,
                 'status' => $company->status,
                 'created_at' => $company->created_at,
                 'plan_name' => $company->plan ? $company->plan->name : __('No Plan'),
                 'plan_expiry_date' => $company->plan_expire_date,
+                'employee_count' => $employeeCount,
+                'payroll_run_count' => $payrollRunCount,
+                // Onboarded = has real payroll activity; empty accounts are the
+                // leftover self-registrations from when public sign-up was open.
+                'has_activity' => $employeeCount > 0 || $payrollRunCount > 0,
             ];
         });
 
@@ -70,7 +95,7 @@ class CompanyController extends Controller
         return Inertia::render('companies/index', [
             'companies' => $companies,
             'plans' => $plans,
-            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'sort_field', 'sort_direction', 'per_page', 'view']),
+            'filters' => $request->only(['search', 'status', 'activity', 'start_date', 'end_date', 'sort_field', 'sort_direction', 'per_page', 'view']),
         ]);
     }
 
