@@ -88,7 +88,7 @@ class SalaryComponentController extends Controller
             // track-a/10: `zambia_pension` marks a deduction component as
             // qualifying for PAYE relief (capped per Zambia Tax Settings).
             // It behaves like `fixed` for amount purposes — uses default_amount.
-            'calculation_type' => 'required|in:fixed,percentage,zambia_pension',
+            'calculation_type' => 'required|in:fixed,percentage,zambia_pension,hourly,daily,percentage_of_hourly',
             // Allow blank/zero for fixed components (e.g. placeholder fixed
             // components set per-employee later) — a blank amount saves as 0.
             'default_amount' => 'nullable|numeric|min:0',
@@ -106,7 +106,7 @@ class SalaryComponentController extends Controller
 
         // Set default values based on calculation type
         // track-a/10: zambia_pension uses default_amount like 'fixed'.
-        if (in_array($validated['calculation_type'], ['fixed', 'zambia_pension'], true)) {
+        if (in_array($validated['calculation_type'], ['fixed', 'zambia_pension', 'hourly', 'daily'], true)) {
             $validated['percentage_of_basic'] = null;
             // Amount may be absent, null, or '' when the user leaves it blank — all
             // of those mean zero. (Accessing the key directly would 500 when absent.)
@@ -145,11 +145,11 @@ class SalaryComponentController extends Controller
                     'description' => 'nullable|string',
                     'type' => ['required', Rule::enum(ComponentType::class)],
                     // track-a/10: accept zambia_pension (behaves like fixed for amount)
-                    'calculation_type' => 'required|in:fixed,percentage,zambia_pension',
+                    'calculation_type' => 'required|in:fixed,percentage,zambia_pension,hourly,daily,percentage_of_hourly',
                     // Allow blank/zero for fixed components (e.g. placeholder fixed
             // components set per-employee later) — a blank amount saves as 0.
             'default_amount' => 'nullable|numeric|min:0',
-                    'percentage_of_basic' => 'required_if:calculation_type,percentage|nullable|numeric|min:0|max:100',
+                    'percentage_of_basic' => 'required_if:calculation_type,percentage,percentage_of_hourly|nullable|numeric|min:0|max:1000',
                     'is_taxable' => 'boolean',
                     'is_mandatory' => 'boolean',
                     'status' => 'nullable|in:active,inactive',
@@ -159,7 +159,7 @@ class SalaryComponentController extends Controller
 
                 // Set default values based on calculation type
                 // track-a/10: zambia_pension uses default_amount like 'fixed'.
-                if (in_array($validated['calculation_type'], ['fixed', 'zambia_pension'], true)) {
+                if (in_array($validated['calculation_type'], ['fixed', 'zambia_pension', 'hourly', 'daily'], true)) {
                     $validated['percentage_of_basic'] = null;
                     // Blank/absent amount means zero.
                     $amount = $validated['default_amount'] ?? null;

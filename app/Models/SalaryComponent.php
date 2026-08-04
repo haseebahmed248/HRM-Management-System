@@ -61,13 +61,33 @@ class SalaryComponent extends BaseModel
     /**
      * Calculate component amount based on basic salary.
      */
-    public function calculateAmount($basicSalary = 0)
+    public function calculateAmount($basicSalary = 0, ?float $hourlyRate = null, ?float $dailyRate = null)
     {
-        if ($this->calculation_type === 'percentage' && $this->percentage_of_basic) {
-            return ($basicSalary * $this->percentage_of_basic) / 100;
+        $percentage = (float) ($this->percentage_of_basic ?? 0);
+        $quantity   = (float) ($this->default_amount ?? 0);
+
+        switch ($this->calculation_type) {
+            case 'percentage':
+                return $percentage ? ($basicSalary * $percentage) / 100 : 0;
+
+            // Rate-based types. When the employee rate is unavailable (null) the
+            // component contributes 0 rather than a wrong figure.
+            case 'hourly':
+                // default_amount = number of hours paid at the hourly rate
+                return round(($hourlyRate ?? 0) * $quantity, 2);
+
+            case 'daily':
+                // default_amount = number of days paid at the daily rate
+                return round(($dailyRate ?? 0) * $quantity, 2);
+
+            case 'percentage_of_hourly':
+                // percentage_of_basic = percentage applied to one hour's pay
+                return $percentage ? round((($hourlyRate ?? 0) * $percentage) / 100, 2) : 0;
+
+            // fixed and zambia_pension use the stored default_amount.
+            default:
+                return $this->default_amount;
         }
-        
-        return $this->default_amount;
     }
 
     public function componentType(): ComponentType

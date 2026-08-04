@@ -319,12 +319,18 @@ export default function SalaryComponents() {
           percentage: 'bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20',
           zambia_paye: 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20',
           zambia_pension: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20',
+          hourly: 'bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-600/20',
+          daily: 'bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-600/20',
+          percentage_of_hourly: 'bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20',
         };
         const labels: Record<string, string> = {
           fixed: t('Fixed'),
           percentage: t('Percentage'),
           zambia_paye: t('Zambia PAYE'),
           zambia_pension: t('Zambia Pension'),
+          hourly: t('Hourly Rate'),
+          daily: t('Daily Wage'),
+          percentage_of_hourly: t('% of Hourly'),
         };
         return (
           <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${styles[value] ?? styles.fixed}`}>
@@ -336,14 +342,20 @@ export default function SalaryComponents() {
     {
       key: 'amount',
       label: t('Amount/Percentage'),
-      render: (value: any, row: any) => (
-  <span className="font-mono">
-    {row.calculation_type === 'percentage'
-      ? `${row.percentage_of_basic}%`
-      : `ZK ${parseFloat(row.default_amount).toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    }
-  </span>
-)
+      render: (value: any, row: any) => {
+        const ct = row.calculation_type;
+        let display: string;
+        if (ct === 'percentage' || ct === 'percentage_of_hourly') {
+          display = `${row.percentage_of_basic}%`;
+        } else if (ct === 'hourly') {
+          display = `${row.default_amount} ${t('hrs')}`;
+        } else if (ct === 'daily') {
+          display = `${row.default_amount} ${t('days')}`;
+        } else {
+          display = `ZK ${parseFloat(row.default_amount).toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+        return <span className="font-mono">{display}</span>;
+      }
     },
     // {
     //   key: 'is_taxable',
@@ -554,13 +566,19 @@ export default function SalaryComponents() {
               options: [
                 { value: 'fixed', label: t('Fixed Amount') },
                 { value: 'percentage', label: t('Percentage of Basic') },
+                // Rate-based: valued from the employee's derived hourly / daily rate.
+                { value: 'hourly', label: t('Hourly Rate (× hours)') },
+                { value: 'daily', label: t('Daily Wage (× days)') },
+                { value: 'percentage_of_hourly', label: t('Percentage of Hourly Rate') },
                 // track-a/10: zambia_pension makes this deduction qualify
                 // for PAYE relief (capped per Zambia Tax Settings).
                 { value: 'zambia_pension', label: t('Zambia Pension (PAYE relief)') }
               ]
             },
-            { name: 'default_amount', label: t('Fixed Amount'), type: 'number' },
-            { name: 'percentage_of_basic', label: t('Percentage of Basic'), type: 'number' },
+            // Fixed = amount; Hourly = number of hours; Daily = number of days.
+            { name: 'default_amount', label: t('Fixed Amount / Hours / Days'), type: 'number' },
+            // Percentage of Basic, or Percentage of Hourly Rate depending on type.
+            { name: 'percentage_of_basic', label: t('Percentage'), type: 'number' },
             { name: 'is_taxable', label: t('Taxable (subject to PAYE)'), type: 'checkbox', defaultValue: true },
             {
               name: '_processing_rules',

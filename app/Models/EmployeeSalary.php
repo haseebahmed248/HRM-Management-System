@@ -179,6 +179,16 @@ class EmployeeSalary extends BaseModel
             }
         }
 
+        // Rate-based components (hourly / daily / percentage_of_hourly) are valued
+        // from the employee's derived hourly and daily rates. Resolve the work
+        // schedule from company settings so the rates match payroll processing.
+        $companyId    = getCompanyId($this->created_by) ?? $this->created_by;
+        $hoursPerDay  = max(0.01, (float) getSetting('hours_per_day', 8, $companyId));
+        $daysPerMonth = max(1, (int) getSetting('working_days_per_month', 22, $companyId));
+        $rateInfo     = $this->rateBreakdown($hoursPerDay, 5, $daysPerMonth);
+        $hourlyRate   = (float) ($rateInfo['hourly_rate'] ?? 0);
+        $dailyRate    = (float) ($rateInfo['daily_rate'] ?? 0);
+
         $earnings        = ['Basic Salary' => $this->basic_salary];
         $deductions      = [];
         $employerContributions = [];
@@ -204,7 +214,7 @@ class EmployeeSalary extends BaseModel
             // back to the component's own calculation (percentage or fixed).
             $amount = array_key_exists($id, $customAmounts)
                 ? $customAmounts[$id]
-                : $component->calculateAmount($this->basic_salary);
+                : $component->calculateAmount($this->basic_salary, $hourlyRate, $dailyRate);
 
             $prorationFactor = $component->pro_rata_start_end
                 ? max(0.0, min(1.0, (float) ($processingContext['proration_factor'] ?? 1.0)))
