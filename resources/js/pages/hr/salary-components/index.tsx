@@ -608,7 +608,7 @@ export default function SalaryComponents() {
                           disabled={formMode === 'view'}
                         >
                           <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="z-[60000]">
                             <SelectItem value="none">{t('No delay')}</SelectItem>
                             <SelectItem value="delay_for">{t('Delay for')}</SelectItem>
                             <SelectItem value="use_for_next">{t('Use for next')}</SelectItem>
@@ -640,7 +640,7 @@ export default function SalaryComponents() {
                           disabled={formMode === 'view'}
                         >
                           <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="z-[60000]">
                             <SelectItem value="year_end">{t('At year end')}</SelectItem>
                             <SelectItem value="never">{t('Never')}</SelectItem>
                             <SelectItem value="specific_month">{t('In a specific month')}</SelectItem>
@@ -657,7 +657,7 @@ export default function SalaryComponents() {
                             disabled={formMode === 'view'}
                           >
                             <SelectTrigger id="clear_specific_month"><SelectValue placeholder={t('Select month')} /></SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="z-[60000]">
                               {Array.from({ length: 12 }, (_, index) => (
                                 <SelectItem key={index + 1} value={String(index + 1)}>
                                   {new Date(2026, index, 1).toLocaleString(undefined, { month: 'long' })}
