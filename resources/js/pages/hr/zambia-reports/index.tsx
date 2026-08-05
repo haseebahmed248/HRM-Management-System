@@ -421,7 +421,7 @@ export default function ZambiaReports() {
                                     <option value="">{t('— Select a payroll run —')}</option>
                                     {(payrollRuns || []).map((run: any) => (
                                         <option key={run.id} value={run.id}>
-                                            {run.title} — {new Date(run.pay_period_start).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+                                            {run.title}
                                         </option>
                                     ))}
                                 </select>
