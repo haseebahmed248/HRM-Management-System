@@ -222,6 +222,11 @@ export default function ZambiaReports() {
             description: t('Per-employee journal: gross, PAYE, NAPSA, NHIMA, other deductions, net pay and employer contributions, with totals.'),
         },
         {
+            key:         'hr.zambia-reports.payroll-summary-journal',
+            title:       t('Payroll Summary Journal'),
+            description: t('Double-entry accounting journal with GL account codes: earnings and employer contributions (Debit), net pay and statutory payables (Credit). Debits equal Credits.'),
+        },
+        {
             key:         'hr.zambia-reports.payroll-detailed',
             title:       t('Payroll Detailed Report'),
             description: t('Full per-employee breakdown: basic, earnings, PAYE, NAPSA, NHIMA and net pay.'),

@@ -593,6 +593,143 @@ class ZambiaReportController extends Controller
         return $this->exportSections($format, 'Payroll_Journal_' . $run->pay_period_start->format('M_Y'), $sections);
     }
 
+    // ─── Payroll Summary Journal (double-entry / GL posting) ────────────────
+    // Company-level accounting journal for a run: gross earnings (by component)
+    // and employer contributions on the Debit side; net pay, statutory payables
+    // and other deductions on the Credit side. Debits always equal Credits.
+    public function payrollSummaryJournal(Request $request)
+    {
+        $request->validate(['payroll_run_id' => 'required|exists:payroll_runs,id']);
+
+        $run     = $this->getPayrollRun($request->payroll_run_id);
+        $entries = $this->getFilteredEntries($request->payroll_run_id, $request);
+        $format  = $request->input('format', 'csv');
+
+        // Aggregate gross earnings by component name (exclude employer-contribution lines).
+        $earnings = [];
+        foreach ($entries as $e) {
+            foreach ($e->earnings_breakdown ?? [] as $line) {
+                if (!is_array($line)) {
+                    continue;
+                }
+                if (\App\Support\ComponentType::isEmployerContributionLine($line)) {
+                    continue;
+                }
+                $name = $line['name'] ?? 'Earning';
+                $earnings[$name] = ($earnings[$name] ?? 0) + (float) ($line['amount'] ?? 0);
+            }
+        }
+
+        // Statutory + employer figures for the whole run.
+        $paye     = $entries->sum(fn ($e) => $this->getDeductionAmount($e, 'zambia_paye'));
+        $napsaEmp = $entries->sum(fn ($e) => $this->getDeductionAmount($e, 'zambia_napsa_employee'));
+        $napsaEmr = $entries->sum(fn ($e) => $this->getEarningAmount($e, 'zambia_napsa_employer'));
+        $nhimaEmp = $entries->sum(fn ($e) => $this->getDeductionAmount($e, 'zambia_nhima_employee'));
+        $nhimaEmr = $entries->sum(fn ($e) => $this->getEarningAmount($e, 'zambia_nhima_employer'));
+        $sdl      = $entries->sum(fn ($e) => $this->getEarningAmount($e, 'zambia_sdl'));
+        $net      = (float) $entries->sum('net_pay');
+        $totalDed = (float) $entries->sum('total_deductions');
+        // Non-statutory deductions (advances, union dues, etc.) balance the entry.
+        $otherDed = max(0, $totalDed - $paye - $napsaEmp - $nhimaEmp);
+
+        $codes = $this->journalAccountCodes();
+        $fmt   = fn ($v) => (float) $v == 0.0 ? '-' : number_format($v, 2, '.', ',');
+
+        $rows = [];
+        $totalDebit = 0.0;
+        $totalCredit = 0.0;
+        $addDebit = function ($code, $desc, $amt) use (&$rows, &$totalDebit, $fmt) {
+            $rows[] = [$code, $desc, $fmt($amt), ''];
+            $totalDebit += (float) $amt;
+        };
+        $addCredit = function ($code, $desc, $amt) use (&$rows, &$totalCredit, $fmt) {
+            $rows[] = [$code, $desc, '', $fmt($amt)];
+            $totalCredit += (float) $amt;
+        };
+
+        // ── DEBIT: gross earnings by component ──────────────────────────────
+        foreach ($earnings as $name => $amt) {
+            $addDebit($this->journalCodeForEarning($name, $codes), $name, $amt);
+        }
+        // ── DEBIT: employer contribution expenses ───────────────────────────
+        if ($napsaEmr != 0.0) $addDebit($codes['napsa_emr_expense'], 'Pension, Retirement Benefits - NAPSA (Employer)', $napsaEmr);
+        if ($nhimaEmr != 0.0) $addDebit($codes['nhima_emr_expense'], 'Medical Insurance - NHI (Employer)', $nhimaEmr);
+        if ($sdl != 0.0)      $addDebit($codes['sdl_expense'], 'Skills Development Levy (Employer)', $sdl);
+
+        // ── CREDIT: net pay + payables ──────────────────────────────────────
+        $addCredit($codes['net_salary'], 'Net Salary Payable', $net);
+        if ($paye != 0.0)                   $addCredit($codes['paye'], 'Payroll Tax - Employee Withholdings - PAYE', $paye);
+        if (($napsaEmp + $napsaEmr) != 0.0) $addCredit($codes['napsa_payable'], 'NAPSA Payable (Employee + Employer)', $napsaEmp + $napsaEmr);
+        if (($nhimaEmp + $nhimaEmr) != 0.0) $addCredit($codes['nhima_payable'], 'National Health Insurance - NHI Payable', $nhimaEmp + $nhimaEmr);
+        if ($sdl != 0.0)                    $addCredit($codes['sdl_payable'], 'SDL Payable', $sdl);
+        if ($otherDed != 0.0)               $addCredit($codes['other_deductions'], 'Other Deductions / Employee Advances', $otherDed);
+
+        // ── Totals ──────────────────────────────────────────────────────────
+        $rows[] = ['', 'TOTALS', number_format($totalDebit, 2, '.', ','), number_format($totalCredit, 2, '.', ',')];
+        $balanced = round($totalDebit - $totalCredit, 2) == 0.0;
+
+        $sections = [
+            ['type' => 'title', 'content' => 'Payroll Summary Journal — ' . $run->pay_period_start->format('F Y')],
+            ['type' => 'info', 'rows' => [
+                ['Pay Period', $run->pay_period_start->format('d M Y') . ' – ' . $run->pay_period_end->format('d M Y')],
+                ['Pay Date', $run->pay_date->format('d M Y')],
+                ['Total Employees', $entries->count()],
+                ['Balance Check', $balanced ? 'Balanced' : 'OUT OF BALANCE by ' . number_format($totalDebit - $totalCredit, 2)],
+            ]],
+            ['type' => 'blank'],
+            ['type' => 'table', 'title' => 'Payroll Journal (Double Entry)', 'headers' => ['Account', 'Description', 'Debit (ZMW)', 'Credit (ZMW)'], 'rows' => $rows],
+        ];
+
+        return $this->exportSections($format, 'Payroll_Summary_Journal_' . $run->pay_period_start->format('M_Y'), $sections);
+    }
+
+    // Default general-ledger account codes for the payroll journal. A company can
+    // override any of these via the `payroll_journal_accounts` setting (JSON).
+    private function journalAccountCodes(): array
+    {
+        $defaults = [
+            'net_salary'        => '200-050',
+            'paye'              => '200-100',
+            'napsa_payable'     => '200-110',
+            'nhima_payable'     => '200-120',
+            'other_deductions'  => '200-130',
+            'sdl_payable'       => '200-140',
+            'napsa_emr_expense' => '600-400',
+            'nhima_emr_expense' => '600-440',
+            'sdl_expense'       => '600-450',
+            'earnings_fallback' => '600-100',
+            // Matched against the lowercased component name by keyword (first hit wins),
+            // so "Housing Allowance 30%" still maps to 600-120.
+            'earnings' => [
+                'basic'       => '600-110',
+                'housing'     => '600-120',
+                'transport'   => '600-130',
+                'expatriate'  => '600-140',
+                'car'         => '600-150',
+                'leave'       => '600-160',
+                'lunch'       => '600-170',
+                'commission'  => '600-180',
+                'overtime'    => '600-190',
+                'gratuity'    => '600-200',
+            ],
+        ];
+
+        $override = json_decode((string) getSetting('payroll_journal_accounts', ''), true);
+
+        return is_array($override) ? array_replace_recursive($defaults, $override) : $defaults;
+    }
+
+    private function journalCodeForEarning(string $name, array $codes): string
+    {
+        $normalized = strtolower($name);
+        foreach (($codes['earnings'] ?? []) as $keyword => $code) {
+            if (str_contains($normalized, $keyword)) {
+                return $code;
+            }
+        }
+        return $codes['earnings_fallback'] ?? '';
+    }
+
     // ─── Report 6 — Employee List Report ────────────────────────────────────
 
     public function employeeList(Request $request)

@@ -178,6 +178,8 @@ Route::post('settings/zambia-tax/update',
             ->name('hr.zambia-reports.bank-schedule');
         Route::get('hr/zambia-reports/payroll-summary', [\App\Http\Controllers\ZambiaReportController::class, 'payrollSummary'])
             ->name('hr.zambia-reports.payroll-summary');
+        Route::get('hr/zambia-reports/payroll-summary-journal', [\App\Http\Controllers\ZambiaReportController::class, 'payrollSummaryJournal'])
+            ->name('hr.zambia-reports.payroll-summary-journal');
         Route::get('hr/zambia-reports/payroll-detailed', [\App\Http\Controllers\ZambiaReportController::class, 'payrollDetailed'])
             ->name('hr.zambia-reports.payroll-detailed');
         Route::get('hr/zambia-reports/payroll-entries', [\App\Http\Controllers\ZambiaReportController::class, 'payrollEntries'])
