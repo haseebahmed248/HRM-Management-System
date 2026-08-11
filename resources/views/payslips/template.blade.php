@@ -237,7 +237,7 @@
             <div class="company-contact">{{ implode(' | ', $companyContacts) }}</div>
         @endif
         <div class="payslip-title">{{ $templateConfig['header']['title'] ?? 'Salary Slip' }}</div>
-        <div class="period-title">{{ $payrollEntry->payrollRun->pay_period_start->format('F Y') }}</div>
+        <div class="period-title">{{ $payrollEntry->payrollRun->pay_period_end->format('F Y') }}</div>
     </div>
 
     @if (($templateConfig['sections']['employee_info'] ?? true) && count($employeeFieldRows) > 0)

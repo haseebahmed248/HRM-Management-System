@@ -36,6 +36,12 @@ const getMonthRange = (year: string, month: string) => {
   return { start, end };
 };
 
+// Format a Date using its LOCAL calendar day. Using toISOString() here shifts
+// the date back a day in timezones ahead of UTC (e.g. Zambia, UTC+2), which
+// made auto-suggested periods start on the last day of the previous month.
+const formatLocalDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 const adjustPayDate = (dateStr: string): string => {
   if (!dateStr) return dateStr;
   const date = new Date(dateStr);
@@ -173,8 +179,8 @@ export default function PayrollRuns() {
 
     return {
       frequency:   freq,
-      periodStart: nextStart.toISOString().split('T')[0],
-      periodEnd:   nextEnd.toISOString().split('T')[0],
+      periodStart: formatLocalDate(nextStart),
+      periodEnd:   formatLocalDate(nextEnd),
       month:       (nextStart.getMonth() + 1).toString().padStart(2, '0'),
       year:        nextStart.getFullYear().toString(),
     };
