@@ -139,9 +139,11 @@ class LeaveApplication extends BaseModel
             ]
         );
         
-        // Deduct the leave days
+        // Deduct the leave days. Recalculate remaining via the canonical formula
+        // (allocated + carried_forward + manual_adjustment - used) so carried-forward
+        // and adjustment days are not silently dropped when leave is taken.
         $leaveBalance->used_days += $this->total_days;
-        $leaveBalance->remaining_days = $leaveBalance->allocated_days - $leaveBalance->used_days;
+        $leaveBalance->calculateRemainingDays();
         $leaveBalance->save();
     }
 }
