@@ -385,6 +385,18 @@ class PayrollRunController extends Controller
                 'approved_by' => Auth::id(),
             ]);
 
+            // Accrue monthly/yearly leave for the employees on this run. Best-effort:
+            // a failure here must never block payroll finalization. Idempotent, so
+            // re-approving an unlocked run will not double-accrue.
+            try {
+                app(\App\Services\LeaveAccrualService::class)->accrueForPayrollRun($payrollRun);
+            } catch (\Throwable $e) {
+                \Log::error('Leave accrual failed on payroll finalize', [
+                    'payroll_run_id' => $payrollRun->id,
+                    'error'          => $e->getMessage(),
+                ]);
+            }
+
             return redirect()->back()->with('success', __('Payroll run approved and marked as final.'));
         }
 
