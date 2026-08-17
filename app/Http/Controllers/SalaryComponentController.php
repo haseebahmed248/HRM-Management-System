@@ -92,7 +92,8 @@ class SalaryComponentController extends Controller
             // Allow blank/zero for fixed components (e.g. placeholder fixed
             // components set per-employee later) — a blank amount saves as 0.
             'default_amount' => 'nullable|numeric|min:0',
-            'percentage_of_basic' => 'required_if:calculation_type,percentage|nullable|numeric|min:0|max:100',
+            'percentage_of_basic' => 'required_if:calculation_type,percentage,percentage_of_hourly|nullable|numeric|min:0|max:1000',
+            'account_code' => 'nullable|string|max:50',
             'is_taxable' => 'boolean',
             'is_mandatory' => 'boolean',
             'status' => 'nullable|in:active,inactive',
@@ -150,6 +151,7 @@ class SalaryComponentController extends Controller
             // components set per-employee later) — a blank amount saves as 0.
             'default_amount' => 'nullable|numeric|min:0',
                     'percentage_of_basic' => 'required_if:calculation_type,percentage,percentage_of_hourly|nullable|numeric|min:0|max:1000',
+                    'account_code' => 'nullable|string|max:50',
                     'is_taxable' => 'boolean',
                     'is_mandatory' => 'boolean',
                     'status' => 'nullable|in:active,inactive',

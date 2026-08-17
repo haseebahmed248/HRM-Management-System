@@ -616,9 +616,36 @@ class ZambiaReportController extends Controller
                     continue;
                 }
                 $name = $line['name'] ?? 'Earning';
-                $earnings[$name] = ($earnings[$name] ?? 0) + (float) ($line['amount'] ?? 0);
+                if (!isset($earnings[$name])) {
+                    $earnings[$name] = ['amount' => 0.0, 'component_id' => $line['component_id'] ?? null];
+                }
+                $earnings[$name]['amount'] += (float) ($line['amount'] ?? 0);
             }
         }
+
+        // Non-statutory deduction components, aggregated for itemised journal lines.
+        $deductionComponents = [];
+        foreach ($entries as $e) {
+            foreach ($e->deductions_breakdown ?? [] as $line) {
+                if (!is_array($line)) {
+                    continue;
+                }
+                if (in_array($line['type'] ?? '', ['zambia_paye', 'zambia_napsa_employee', 'zambia_nhima_employee'], true)) {
+                    continue; // statutory deductions are shown on their own lines below
+                }
+                $name = $line['name'] ?? 'Deduction';
+                if (!isset($deductionComponents[$name])) {
+                    $deductionComponents[$name] = ['amount' => 0.0, 'component_id' => $line['component_id'] ?? null];
+                }
+                $deductionComponents[$name]['amount'] += (float) ($line['amount'] ?? 0);
+            }
+        }
+
+        // Per-component GL account codes set by the company on each salary component.
+        $componentCodes = \App\Models\SalaryComponent::whereIn('created_by', getCompanyAndUsersId())
+            ->whereNotNull('account_code')
+            ->where('account_code', '!=', '')
+            ->pluck('account_code', 'id');
 
         // Statutory + employer figures for the whole run.
         $paye     = $entries->sum(fn ($e) => $this->getDeductionAmount($e, 'zambia_paye'));
@@ -648,8 +675,12 @@ class ZambiaReportController extends Controller
         };
 
         // ── DEBIT: gross earnings by component ──────────────────────────────
-        foreach ($earnings as $name => $amt) {
-            $addDebit($this->journalCodeForEarning($name, $codes), $name, $amt);
+        foreach ($earnings as $name => $info) {
+            $cid  = $info['component_id'] ?? null;
+            $code = ($cid && isset($componentCodes[$cid]))
+                ? $componentCodes[$cid]
+                : $this->journalCodeForEarning($name, $codes);
+            $addDebit($code, $name, $info['amount']);
         }
         // ── DEBIT: employer contribution expenses ───────────────────────────
         if ($napsaEmr != 0.0) $addDebit($codes['napsa_emr_expense'], 'Pension, Retirement Benefits - NAPSA (Employer)', $napsaEmr);
@@ -662,7 +693,22 @@ class ZambiaReportController extends Controller
         if (($napsaEmp + $napsaEmr) != 0.0) $addCredit($codes['napsa_payable'], 'NAPSA Payable (Employee + Employer)', $napsaEmp + $napsaEmr);
         if (($nhimaEmp + $nhimaEmr) != 0.0) $addCredit($codes['nhima_payable'], 'National Health Insurance - NHI Payable', $nhimaEmp + $nhimaEmr);
         if ($sdl != 0.0)                    $addCredit($codes['sdl_payable'], 'SDL Payable', $sdl);
-        if ($otherDed != 0.0)               $addCredit($codes['other_deductions'], 'Other Deductions / Employee Advances', $otherDed);
+        // Itemise non-statutory deduction components with their own account codes;
+        // any unmatched remainder falls back to the generic Other Deductions line.
+        $itemisedOther = 0.0;
+        foreach ($deductionComponents as $name => $info) {
+            if ((float) $info['amount'] == 0.0) {
+                continue;
+            }
+            $cid  = $info['component_id'] ?? null;
+            $code = ($cid && isset($componentCodes[$cid])) ? $componentCodes[$cid] : $codes['other_deductions'];
+            $addCredit($code, $name, $info['amount']);
+            $itemisedOther += (float) $info['amount'];
+        }
+        $residualOther = round($otherDed - $itemisedOther, 2);
+        if ($residualOther != 0.0) {
+            $addCredit($codes['other_deductions'], 'Other Deductions / Employee Advances', $residualOther);
+        }
 
         // ── Totals ──────────────────────────────────────────────────────────
         $rows[] = ['', 'TOTALS', number_format($totalDebit, 2, '.', ','), number_format($totalCredit, 2, '.', ',')];

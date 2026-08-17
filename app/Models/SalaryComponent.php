@@ -16,6 +16,7 @@ class SalaryComponent extends BaseModel
         'calculation_type',
         'default_amount',
         'percentage_of_basic',
+        'account_code',
         'is_taxable',
         'is_mandatory',
         'affect_notional_pay',

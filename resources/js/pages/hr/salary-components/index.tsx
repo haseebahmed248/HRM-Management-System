@@ -579,6 +579,8 @@ export default function SalaryComponents() {
             { name: 'default_amount', label: t('Fixed Amount / Hours / Days'), type: 'number' },
             // Percentage of Basic, or Percentage of Hourly Rate depending on type.
             { name: 'percentage_of_basic', label: t('Percentage'), type: 'number' },
+            // GL account code used on the Payroll Summary Journal report.
+            { name: 'account_code', label: t('GL Account Code (for journal report)'), type: 'text' },
             { name: 'is_taxable', label: t('Taxable (subject to PAYE)'), type: 'checkbox', defaultValue: true },
             {
               name: '_processing_rules',
