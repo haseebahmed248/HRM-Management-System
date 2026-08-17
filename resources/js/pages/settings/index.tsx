@@ -42,6 +42,7 @@ import JoiningLetterSettings from './components/joining-letter-settings';
 import NocSettings from './components/noc-settings';
 import PaymentSettings from './components/payment-settings';
 import PayslipTemplateSettings, { type PayslipTemplateConfig } from './components/payslip-template-settings';
+import PayrollJournalAccountsSettings from './components/payroll-journal-accounts-settings';
 import RecaptchaSettings from './components/recaptcha-settings';
 import SeoSettings from './components/seo-settings';
 import StorageSettings from './components/storage-settings';
@@ -73,6 +74,8 @@ export default function Settings() {
         zambiaTaxSettings = {},
         employeeIdSettings = {},
         payslipTemplateConfig,
+        payrollJournalAccounts = {},
+        payrollJournalAccountLabels = {},
     } = usePage().props as any;
 
     const isSaas = globalSettings?.is_saas;
@@ -114,6 +117,12 @@ export default function Settings() {
         {
             title: t('Payslip Template'),
             href: '#payslip-template-settings',
+            icon: <ReceiptText className="mr-2 h-4 w-4" />,
+            permission: 'manage-settings',
+        },
+        {
+            title: t('Payroll Journal Accounts'),
+            href: '#payroll-journal-accounts-settings',
             icon: <ReceiptText className="mr-2 h-4 w-4" />,
             permission: 'manage-settings',
         },
@@ -206,6 +215,7 @@ export default function Settings() {
     const sidebarNavItems = allSidebarNavItems.filter((item) => {
         if (item.permission === 'manage-working-days-settings' && auth.user?.type === 'superadmin') return false;
         if (item.href === '#payslip-template-settings' && auth.user?.type === 'superadmin') return false;
+        if (item.href === '#payroll-journal-accounts-settings' && auth.user?.type === 'superadmin') return false;
         if (item.permission === 'manage-biomatric-attedance-settings' && auth.user?.type === 'superadmin') return false;
         if (item.permission === 'manage-ip-restriction-settings' && auth.user?.type === 'superadmin') return false;
         if (item.permission === 'manage-noc' && auth.user?.type === 'superadmin') return false;
@@ -250,6 +260,7 @@ export default function Settings() {
     const currencySettingsRef = useRef<HTMLDivElement>(null);
     const workingDaysSettingsRef = useRef<HTMLDivElement>(null);
     const payslipTemplateSettingsRef = useRef<HTMLDivElement>(null);
+    const payrollJournalAccountsSettingsRef = useRef<HTMLDivElement>(null);
     const emailSettingsRef = useRef<HTMLDivElement>(null);
     const paymentSettingsRef = useRef<HTMLDivElement>(null);
     const storageSettingsRef = useRef<HTMLDivElement>(null);
@@ -455,6 +466,17 @@ export default function Settings() {
                         payslipTemplateConfig && (
                         <section id="payslip-template-settings" ref={payslipTemplateSettingsRef} className="mb-8">
                             <PayslipTemplateSettings config={payslipTemplateConfig as PayslipTemplateConfig} />
+                        </section>
+                    )}
+
+                    {/* Payroll Journal Account Codes */}
+                    {auth.user?.type !== 'superadmin' &&
+                        (auth.user?.type === 'company' || auth.permissions?.includes('manage-settings')) && (
+                        <section id="payroll-journal-accounts-settings" ref={payrollJournalAccountsSettingsRef} className="mb-8">
+                            <PayrollJournalAccountsSettings
+                                accounts={payrollJournalAccounts as Record<string, string>}
+                                labels={payrollJournalAccountLabels as Record<string, string>}
+                            />
                         </section>
                     )}
 

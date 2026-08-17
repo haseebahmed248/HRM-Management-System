@@ -94,6 +94,8 @@ $zambiaTaxSettings = array_merge(
             'experienceCertificateTemplates'  => $experienceCertificateTemplates,
             'zambiaTaxSettings'               => $zambiaTaxSettings,
             'payslipTemplateConfig'           => PayslipTemplateConfig::forCompany($companyId),
+            'payrollJournalAccounts'          => \App\Support\PayrollJournalAccounts::editableForCompany($companyId),
+            'payrollJournalAccountLabels'     => \App\Support\PayrollJournalAccounts::EDITABLE,
         ]);
     }
 }

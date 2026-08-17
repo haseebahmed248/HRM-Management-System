@@ -676,10 +676,14 @@ class ZambiaReportController extends Controller
 
         // ── DEBIT: gross earnings by component ──────────────────────────────
         foreach ($earnings as $name => $info) {
-            $cid  = $info['component_id'] ?? null;
-            $code = ($cid && isset($componentCodes[$cid]))
-                ? $componentCodes[$cid]
-                : $this->journalCodeForEarning($name, $codes);
+            $cid = $info['component_id'] ?? null;
+            if ($name === 'Basic Salary') {
+                $code = $codes['basic_pay'] ?? '600-110';
+            } elseif ($cid && isset($componentCodes[$cid])) {
+                $code = $componentCodes[$cid];
+            } else {
+                $code = $this->journalCodeForEarning($name, $codes);
+            }
             $addDebit($code, $name, $info['amount']);
         }
         // ── DEBIT: employer contribution expenses ───────────────────────────
@@ -729,40 +733,13 @@ class ZambiaReportController extends Controller
         return $this->exportSections($format, 'Payroll_Summary_Journal_' . $run->pay_period_start->format('M_Y'), $sections);
     }
 
-    // Default general-ledger account codes for the payroll journal. A company can
-    // override any of these via the `payroll_journal_accounts` setting (JSON).
+    // GL account codes for the payroll journal — company-configurable via the
+    // Payroll Journal Accounts settings screen (with sensible defaults).
     private function journalAccountCodes(): array
     {
-        $defaults = [
-            'net_salary'        => '200-050',
-            'paye'              => '200-100',
-            'napsa_payable'     => '200-110',
-            'nhima_payable'     => '200-120',
-            'other_deductions'  => '200-130',
-            'sdl_payable'       => '200-140',
-            'napsa_emr_expense' => '600-400',
-            'nhima_emr_expense' => '600-440',
-            'sdl_expense'       => '600-450',
-            'earnings_fallback' => '600-100',
-            // Matched against the lowercased component name by keyword (first hit wins),
-            // so "Housing Allowance 30%" still maps to 600-120.
-            'earnings' => [
-                'basic'       => '600-110',
-                'housing'     => '600-120',
-                'transport'   => '600-130',
-                'expatriate'  => '600-140',
-                'car'         => '600-150',
-                'leave'       => '600-160',
-                'lunch'       => '600-170',
-                'commission'  => '600-180',
-                'overtime'    => '600-190',
-                'gratuity'    => '600-200',
-            ],
-        ];
+        $companyId = getCompanyId(auth()->id()) ?? auth()->id();
 
-        $override = json_decode((string) getSetting('payroll_journal_accounts', ''), true);
-
-        return is_array($override) ? array_replace_recursive($defaults, $override) : $defaults;
+        return \App\Support\PayrollJournalAccounts::forCompany($companyId);
     }
 
     private function journalCodeForEarning(string $name, array $codes): string

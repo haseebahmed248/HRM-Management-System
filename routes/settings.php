@@ -73,6 +73,9 @@ Route::middleware(['auth', 'verified', 'plan.access'])->group(function () {
     Route::post('settings/payslip-template', [SystemSettingsController::class, 'updatePayslipTemplate'])
         ->middleware('permission:manage-settings')
         ->name('settings.payslip-template.update');
+    Route::post('settings/payroll-journal-accounts', [SystemSettingsController::class, 'updatePayrollJournalAccounts'])
+        ->middleware('permission:manage-settings')
+        ->name('settings.payroll-journal-accounts.update');
     Route::post('settings/storage', [SystemSettingsController::class, 'updateStorage'])->name('settings.storage.update');
     Route::post('settings/recaptcha', [SystemSettingsController::class, 'updateRecaptcha'])->name('settings.recaptcha.update');
     Route::post('settings/chatgpt', [SystemSettingsController::class, 'updateChatgpt'])->name('settings.chatgpt.update');

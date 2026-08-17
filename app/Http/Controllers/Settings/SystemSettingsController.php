@@ -58,6 +58,38 @@ class SystemSettingsController extends Controller
         return redirect()->back()->with('success', __('Payslip template updated successfully.'));
     }
 
+    public function updatePayrollJournalAccounts(Request $request)
+    {
+        $user = $request->user();
+        if (!$user->can('manage-settings') || $user->type === 'superadmin') {
+            return redirect()->back()->with('error', __('Permission Denied.'));
+        }
+
+        $rules = [];
+        foreach (array_keys(\App\Support\PayrollJournalAccounts::EDITABLE) as $key) {
+            $rules[$key] = 'nullable|string|max:50';
+        }
+        $validated = $request->validate($rules);
+
+        $companyId = getCompanyId($user->id) ?? $user->id;
+        $config = \App\Support\PayrollJournalAccounts::normalize($validated);
+
+        updateSetting(
+            'payroll_journal_accounts',
+            json_encode($config, JSON_UNESCAPED_SLASHES),
+            $companyId
+        );
+
+        \App\Models\AuditLog::record(
+            'system',
+            'system_change',
+            'Payroll Journal Accounts',
+            'Payroll journal GL account codes updated'
+        );
+
+        return redirect()->back()->with('success', __('Payroll journal account codes updated successfully.'));
+    }
+
     public function updateStatutoryRegistration(Request $request)
     {
         $user = $request->user();
