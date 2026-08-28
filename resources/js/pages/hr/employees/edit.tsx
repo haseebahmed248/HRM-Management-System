@@ -56,6 +56,7 @@ export default function EmployeeEdit() {
         attendance_policy_id: employee.employee?.attendance_policy_id ? employee.employee.attendance_policy_id.toString() : '',
         date_of_joining:      employee.employee?.date_of_joining || '',
         employment_type:      employee.employee?.employment_type || 'Full-time',
+        labour_category:      employee.employee?.labour_category || 'indirect',
         employee_status:      employee.employee?.employee_status || 'active',
         staff_tier:           employee.employee?.staff_tier || 'junior',
         napsa_number:         employee.employee?.napsa_number || '',
@@ -616,6 +617,23 @@ export default function EmployeeEdit() {
                                     </SelectContent>
                                 </Select>
                                 {errors.employment_type && <p className="text-xs text-red-500">{errors.employment_type}</p>}
+                            </div>
+
+                            {/* Labour Category — groups direct staff into a single
+                                Direct Labour line on the Payroll Summary Journal */}
+                            <div className="space-y-2">
+                                <Label htmlFor="labour_category">{t('Labour Category')}</Label>
+                                <Select value={formData.labour_category}
+                                    onValueChange={(value) => handleChange('labour_category', value)}>
+                                    <SelectTrigger className={errors.labour_category ? 'border-red-500' : ''}>
+                                        <SelectValue placeholder={t('Select Labour Category')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="indirect">{t('Indirect Labour')}</SelectItem>
+                                        <SelectItem value="direct">{t('Direct Labour')}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {errors.labour_category && <p className="text-xs text-red-500">{errors.labour_category}</p>}
                             </div>
 
                             {/* Employee Status */}

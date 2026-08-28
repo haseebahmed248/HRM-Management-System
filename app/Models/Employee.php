@@ -74,6 +74,7 @@ class Employee extends Model
     'attendance_policy_id',
     'date_of_joining',
     'employment_type',
+    'labour_category',
     'address_line_1',
     'address_line_2',
     'base_salary',

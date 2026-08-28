@@ -605,14 +605,29 @@ class ZambiaReportController extends Controller
         $entries = $this->getFilteredEntries($request->payroll_run_id, $request);
         $format  = $request->input('format', 'csv');
 
-        // Aggregate gross earnings by component name (exclude employer-contribution lines).
-        $earnings = [];
+        // Direct vs indirect labour is a presentation split only. Staff classified
+        // as direct labour collapse into a single "Direct Labour" debit covering
+        // basic, allowances and their employer statutory contributions; indirect
+        // staff keep the itemised component lines. Totals, statutory calculations
+        // and the entire credit side are unaffected, so the journal still balances.
+        $isDirectLabour = fn ($e) => ($e->employee->employee->labour_category ?? 'indirect') === 'direct';
+        $directEntries  = $entries->filter($isDirectLabour);
+
+        // Aggregate gross earnings by component name (exclude employer-contribution
+        // lines). Direct-labour staff are accumulated into one figure instead.
+        $earnings     = [];
+        $directLabour = 0.0;
         foreach ($entries as $e) {
+            $direct = $isDirectLabour($e);
             foreach ($e->earnings_breakdown ?? [] as $line) {
                 if (!is_array($line)) {
                     continue;
                 }
                 if (\App\Support\ComponentType::isEmployerContributionLine($line)) {
+                    continue;
+                }
+                if ($direct) {
+                    $directLabour += (float) ($line['amount'] ?? 0);
                     continue;
                 }
                 $name = $line['name'] ?? 'Earning';
@@ -654,6 +669,13 @@ class ZambiaReportController extends Controller
         $nhimaEmp = $entries->sum(fn ($e) => $this->getDeductionAmount($e, 'zambia_nhima_employee'));
         $nhimaEmr = $entries->sum(fn ($e) => $this->getEarningAmount($e, 'zambia_nhima_employer'));
         $sdl      = $entries->sum(fn ($e) => $this->getEarningAmount($e, 'zambia_sdl'));
+        // Employer contributions belonging to direct-labour staff, folded into the
+        // grouped figure; the remainder stays on the itemised employer lines. The
+        // credit side keeps using the full totals above.
+        $napsaEmrDirect = $directEntries->sum(fn ($e) => $this->getEarningAmount($e, 'zambia_napsa_employer'));
+        $nhimaEmrDirect = $directEntries->sum(fn ($e) => $this->getEarningAmount($e, 'zambia_nhima_employer'));
+        $sdlDirect      = $directEntries->sum(fn ($e) => $this->getEarningAmount($e, 'zambia_sdl'));
+        $directLabour  += $napsaEmrDirect + $nhimaEmrDirect + $sdlDirect;
         $net      = (float) $entries->sum('net_pay');
         $totalDed = (float) $entries->sum('total_deductions');
         // Non-statutory deductions (advances, union dues, etc.) balance the entry.
@@ -674,7 +696,12 @@ class ZambiaReportController extends Controller
             $totalCredit += (float) $amt;
         };
 
-        // ── DEBIT: gross earnings by component ──────────────────────────────
+        // ── DEBIT: direct labour, as a single grouped figure ────────────────
+        if ($directLabour != 0.0) {
+            $addDebit($codes['direct_labour'] ?? '600-105', 'Direct Labour', $directLabour);
+        }
+
+        // ── DEBIT: gross earnings by component (indirect labour only) ───────
         foreach ($earnings as $name => $info) {
             $cid = $info['component_id'] ?? null;
             if ($name === 'Basic Salary') {
@@ -686,10 +713,14 @@ class ZambiaReportController extends Controller
             }
             $addDebit($code, $name, $info['amount']);
         }
-        // ── DEBIT: employer contribution expenses ───────────────────────────
-        if ($napsaEmr != 0.0) $addDebit($codes['napsa_emr_expense'], 'Pension, Retirement Benefits - NAPSA (Employer)', $napsaEmr);
-        if ($nhimaEmr != 0.0) $addDebit($codes['nhima_emr_expense'], 'Medical Insurance - NHI (Employer)', $nhimaEmr);
-        if ($sdl != 0.0)      $addDebit($codes['sdl_expense'], 'Skills Development Levy (Employer)', $sdl);
+        // ── DEBIT: employer contribution expenses (indirect labour only) ────
+        // Direct-labour employers' contributions are already inside Direct Labour.
+        $napsaEmrIndirect = $napsaEmr - $napsaEmrDirect;
+        $nhimaEmrIndirect = $nhimaEmr - $nhimaEmrDirect;
+        $sdlIndirect      = $sdl - $sdlDirect;
+        if ($napsaEmrIndirect != 0.0) $addDebit($codes['napsa_emr_expense'], 'Pension, Retirement Benefits - NAPSA (Employer)', $napsaEmrIndirect);
+        if ($nhimaEmrIndirect != 0.0) $addDebit($codes['nhima_emr_expense'], 'Medical Insurance - NHI (Employer)', $nhimaEmrIndirect);
+        if ($sdlIndirect != 0.0)      $addDebit($codes['sdl_expense'], 'Skills Development Levy (Employer)', $sdlIndirect);
 
         // ── CREDIT: net pay + payables ──────────────────────────────────────
         $addCredit($codes['net_salary'], 'Net Salary Payable', $net);

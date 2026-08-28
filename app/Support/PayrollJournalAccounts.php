@@ -14,6 +14,7 @@ class PayrollJournalAccounts
     /** Editable code keys shown on the settings screen, in display order. */
     public const EDITABLE = [
         'basic_pay'         => 'Basic Pay',
+        'direct_labour'     => 'Direct Labour (grouped)',
         'net_salary'        => 'Net Salary Payable',
         'paye'              => 'PAYE Payable',
         'napsa_payable'     => 'NAPSA Payable (Employee + Employer)',
@@ -30,6 +31,7 @@ class PayrollJournalAccounts
     {
         return [
             'basic_pay'         => '600-110',
+            'direct_labour'     => '600-105',
             'net_salary'        => '200-050',
             'paye'              => '200-100',
             'napsa_payable'     => '200-110',

@@ -50,6 +50,7 @@ export default function EmployeeCreate() {
         attendance_policy_id: '',
         date_of_joining: '',
         employment_type: 'Full-time',
+        labour_category: 'indirect',
         employee_status: 'active',
         staff_tier: 'junior',
         napsa_number: '',
@@ -603,6 +604,23 @@ export default function EmployeeCreate() {
                                     </SelectContent>
                                 </Select>
                                 {errors.employment_type && <p className="text-xs text-red-500">{errors.employment_type}</p>}
+                            </div>
+
+                            {/* Labour Category — groups direct staff into a single
+                                Direct Labour line on the Payroll Summary Journal */}
+                            <div className="space-y-2">
+                                <Label htmlFor="labour_category">{t('Labour Category')}</Label>
+                                <Select value={formData.labour_category}
+                                    onValueChange={(value) => handleChange('labour_category', value)}>
+                                    <SelectTrigger className={errors.labour_category ? 'border-red-500' : ''}>
+                                        <SelectValue placeholder={t('Select Labour Category')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="indirect">{t('Indirect Labour')}</SelectItem>
+                                        <SelectItem value="direct">{t('Direct Labour')}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {errors.labour_category && <p className="text-xs text-red-500">{errors.labour_category}</p>}
                             </div>
 
                             {/* Employee Status */}

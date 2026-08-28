@@ -257,6 +257,7 @@ class EmployeeController extends Controller
                     'designation_id' => 'nullable|exists:designations,id',
                     'date_of_joining' => 'nullable|date',
                     'employment_type' => 'nullable|string|max:50',
+                    'labour_category' => 'nullable|in:direct,indirect',
                     'employee_status' => 'nullable|string|max:50',
                     // track-a/11: senior/junior payroll tier
                     'staff_tier' => 'nullable|in:senior,junior',
@@ -347,6 +348,7 @@ class EmployeeController extends Controller
                 $employee->attendance_policy_id = $request->attendance_policy_id;
                 $employee->date_of_joining = $request->date_of_joining;
                 $employee->employment_type = $request->employment_type;
+                $employee->labour_category = $request->input('labour_category', $employee->labour_category ?? 'indirect');
                 $employee->employee_status = $request->employee_status ?? 'active';
                 // track-a/11: default to 'junior' so undeclared rows stay scoped
                 $employee->staff_tier = $request->staff_tier ?? 'junior';
@@ -561,6 +563,7 @@ class EmployeeController extends Controller
                     'designation_id' => 'nullable|exists:designations,id',
                     'date_of_joining' => 'nullable|date',
                     'employment_type' => 'nullable|string|max:50',
+                    'labour_category' => 'nullable|in:direct,indirect',
                     'employee_status' => 'nullable|string|max:50',
                     // track-a/11: senior/junior payroll tier
                     'staff_tier' => 'nullable|in:senior,junior',
@@ -636,6 +639,7 @@ class EmployeeController extends Controller
                 $employee->attendance_policy_id = $request->attendance_policy_id;
                 $employee->date_of_joining = $request->date_of_joining;
                 $employee->employment_type = $request->employment_type;
+                $employee->labour_category = $request->input('labour_category', $employee->labour_category ?? 'indirect');
                 $employee->employee_status = $request->employee_status;
                 // track-a/11: preserve existing tier when payload omits it
                 $employee->staff_tier = $request->staff_tier ?? $employee->staff_tier ?? 'junior';
