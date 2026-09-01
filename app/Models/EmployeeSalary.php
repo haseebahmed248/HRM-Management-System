@@ -284,11 +284,27 @@ class EmployeeSalary extends BaseModel
 
         $periodStart = Carbon::parse($context['period_start'])->startOfDay();
         $periodEnd = Carbon::parse($context['period_end'])->endOfDay();
-        $effectiveFrom = $this->effective_from
+
+        // Only an explicit effective_from may exclude a component from a period.
+        //
+        // This used to fall back to created_at, which silently dropped every
+        // allowance whenever a salary was captured after the period being run:
+        // enter a salary on 1 Sep, run August payroll, and the components were
+        // excluded while the basic salary — which is added unconditionally in
+        // calculateAllComponents() — still went through. The employee was paid
+        // basic with no allowances and the gross looked plausible, so nothing
+        // flagged it. With effective_from null on almost every salary record,
+        // that fallback was a silent under-payment waiting to happen.
+        //
+        // The date the row happened to be typed in says nothing about when the
+        // pay applies, so treat components exactly as the basic is treated and
+        // let them run unless the user has actually dated the salary.
+        $hasExplicitStart = ! empty($this->effective_from);
+        $effectiveFrom = $hasExplicitStart
             ? Carbon::parse($this->effective_from)->startOfDay()
             : Carbon::parse($this->created_at ?? $periodStart)->startOfDay();
 
-        if ($periodEnd->lt($effectiveFrom)) {
+        if ($hasExplicitStart && $periodEnd->lt($effectiveFrom)) {
             return false;
         }
 
