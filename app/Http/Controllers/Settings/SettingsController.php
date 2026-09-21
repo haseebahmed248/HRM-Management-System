@@ -71,6 +71,38 @@ $zambiaTaxSettings = array_merge(
         ->toArray()
 );
 
+// Tanzania tax settings — same treatment as Zambia. 2026 TRA defaults per the
+// smartlinkerp reference the client shared. Values match the seeder migration.
+$tanzaniaDefaults = [
+    'tanzania_paye_slab_1_min'  => '0',
+    'tanzania_paye_slab_1_max'  => '270000',
+    'tanzania_paye_slab_1_rate' => '0',
+    'tanzania_paye_slab_2_min'  => '270001',
+    'tanzania_paye_slab_2_max'  => '520000',
+    'tanzania_paye_slab_2_rate' => '8',
+    'tanzania_paye_slab_3_min'  => '520001',
+    'tanzania_paye_slab_3_max'  => '760000',
+    'tanzania_paye_slab_3_rate' => '20',
+    'tanzania_paye_slab_4_min'  => '760001',
+    'tanzania_paye_slab_4_max'  => '1000000',
+    'tanzania_paye_slab_4_rate' => '25',
+    'tanzania_paye_slab_5_min'  => '1000001',
+    'tanzania_paye_slab_5_rate' => '30',
+    'tanzania_nssf_employee_rate' => '10',
+    'tanzania_nssf_employer_rate' => '10',
+    'tanzania_sdl_rate'                => '3.5',
+    'tanzania_sdl_employee_threshold'  => '10',
+    'tanzania_wcf_rate'                => '0.5',
+];
+
+$tanzaniaTaxSettings = array_merge(
+    $tanzaniaDefaults,
+    Setting::where('user_id', getSuperAdminId() ?? creatorId())
+        ->where('key', 'like', 'tanzania_%')
+        ->pluck('value', 'key')
+        ->toArray()
+);
+
         $employeeIdSettings = [
             'employee_id_prefix'  => $systemSettings['employee_id_prefix'] ?? 'EMP',
             'employee_id_padding' => $systemSettings['employee_id_padding'] ?? 6,
@@ -93,6 +125,8 @@ $zambiaTaxSettings = array_merge(
             'joiningLetterTemplates'          => $joiningLetterTemplates,
             'experienceCertificateTemplates'  => $experienceCertificateTemplates,
             'zambiaTaxSettings'               => $zambiaTaxSettings,
+            'tanzaniaTaxSettings'             => $tanzaniaTaxSettings,
+            'companyCountry'                  => \App\Models\User::find($companyId)?->country_code ?? 'ZM',
             'payslipTemplateConfig'           => PayslipTemplateConfig::forCompany($companyId),
             'payrollJournalAccounts'          => \App\Support\PayrollJournalAccounts::editableForCompany($companyId),
             'payrollJournalAccountLabels'     => \App\Support\PayrollJournalAccounts::EDITABLE,

@@ -132,6 +132,18 @@ Route::middleware(['auth', 'verified', 'plan.access'])->group(function () {
 Route::post('settings/zambia-tax/update',
     [\App\Http\Controllers\Settings\ZambiaTaxSettingController::class, 'update']
 )->name('settings.zambia-tax.update');
+
+    // Tanzania Tax Settings routes (mirrors Zambia — Super Admin only writes,
+    // company users see the settings page read-only).
+Route::post('settings/tanzania-tax/update',
+    [\App\Http\Controllers\Settings\TanzaniaTaxSettingController::class, 'update']
+)->name('settings.tanzania-tax.update');
+
+    // Company country picker — flips users.country_code and (optionally)
+    // auto-applies the matching currency settings (TSh for TZ, K for ZM).
+Route::post('settings/company-country/update',
+    [\App\Http\Controllers\Settings\CompanyCountryController::class, 'update']
+)->name('settings.company-country.update');
     Route::post('settings/statutory-registration/update', [SystemSettingsController::class, 'updateStatutoryRegistration'])
         ->name('settings.statutory-registration.update');
 
@@ -187,6 +199,22 @@ Route::post('settings/zambia-tax/update',
             ->name('hr.zambia-reports.payroll-detailed');
         Route::get('hr/zambia-reports/payroll-entries', [\App\Http\Controllers\ZambiaReportController::class, 'payrollEntries'])
             ->name('hr.zambia-reports.payroll-entries');
+
+        // Tanzania basic reports (CSV downloads) — one per statutory plus a
+        // payroll summary. Uses the same manage-payroll-runs permission gate
+        // as Zambia so HR roles inherit access.
+        Route::get('hr/tanzania-reports', [\App\Http\Controllers\TanzaniaReportController::class, 'index'])
+            ->name('hr.tanzania-reports.index');
+        Route::get('hr/tanzania-reports/paye', [\App\Http\Controllers\TanzaniaReportController::class, 'paye'])
+            ->name('hr.tanzania-reports.paye');
+        Route::get('hr/tanzania-reports/nssf', [\App\Http\Controllers\TanzaniaReportController::class, 'nssf'])
+            ->name('hr.tanzania-reports.nssf');
+        Route::get('hr/tanzania-reports/sdl', [\App\Http\Controllers\TanzaniaReportController::class, 'sdl'])
+            ->name('hr.tanzania-reports.sdl');
+        Route::get('hr/tanzania-reports/wcf', [\App\Http\Controllers\TanzaniaReportController::class, 'wcf'])
+            ->name('hr.tanzania-reports.wcf');
+        Route::get('hr/tanzania-reports/payroll-summary', [\App\Http\Controllers\TanzaniaReportController::class, 'payrollSummary'])
+            ->name('hr.tanzania-reports.payroll-summary');
         Route::get('hr/zambia-reports/contributory-history', [\App\Http\Controllers\ZambiaReportController::class, 'contributoryHistory'])
             ->name('hr.zambia-reports.contributory-history');
         Route::get('hr/zambia-reports/deductions-report', [\App\Http\Controllers\ZambiaReportController::class, 'deductionsReport'])

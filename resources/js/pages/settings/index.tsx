@@ -50,6 +50,8 @@ import StatutoryRegistrationSettings from './components/statutory-registration-s
 import SystemSettings from './components/system-settings';
 import WorkingDaysSettings from './components/working-days-settings';
 import ZambiaTaxSettings from './components/zambia-tax-settings';
+import TanzaniaTaxSettings from './components/tanzania-tax-settings';
+import CompanyCountrySettings from './components/company-country-settings';
 import ZektoSettings from './components/zekto-settings';
 
 export default function Settings() {
@@ -72,6 +74,8 @@ export default function Settings() {
         experienceCertificateTemplates = [],
         languages = [],
         zambiaTaxSettings = {},
+        tanzaniaTaxSettings = {},
+        companyCountry = 'ZM',
         employeeIdSettings = {},
         payslipTemplateConfig,
         payrollJournalAccounts = {},
@@ -163,6 +167,12 @@ export default function Settings() {
             permission: 'manage-zambia-tax-settings',
         },
         {
+            title: t('Tanzania Tax Settings'),
+            href: '#tanzania-tax-settings',
+            icon: <DollarSign className="mr-2 h-4 w-4" />,
+            permission: 'manage-tanzania-tax-settings',
+        },
+        {
             title: t('Employee ID Format'),
             href: '#employee-id-settings',
             icon: <FileText className="mr-2 h-4 w-4" />,
@@ -223,6 +233,8 @@ export default function Settings() {
         if (item.permission === 'manage-joining-letter' && auth.user?.type === 'superadmin') return false;
         // Zambia tax settings: Super Admin edits it; companies see it read-only.
         if (item.permission === 'manage-zambia-tax-settings') return auth.user?.type === 'superadmin' || auth.user?.type === 'company';
+        // Tanzania tax settings: same rule — Super Admin edits, companies see read-only.
+        if (item.permission === 'manage-tanzania-tax-settings') return auth.user?.type === 'superadmin' || auth.user?.type === 'company';
 
         if (!item.permission || (auth.permissions && auth.permissions.includes(item.permission))) return true;
 
@@ -237,6 +249,7 @@ export default function Settings() {
                 'manage-biomatric-attedance-settings',
                 'manage-ip-restriction-settings',
                 'manage-zambia-tax-settings',
+                'manage-tanzania-tax-settings',
                 'settings',
             ];
             if (!isSaas) {
@@ -278,6 +291,7 @@ export default function Settings() {
     const experienceCertificateSettingsRef = useRef<HTMLDivElement>(null);
     const joiningLetterSettingsRef = useRef<HTMLDivElement>(null);
     const zambiaTaxSettingsRef = useRef<HTMLDivElement>(null);
+    const tanzaniaTaxSettingsRef = useRef<HTMLDivElement>(null);
 
     // ─── Scroll tracking ─────────────────────────────────────────────────────
     useEffect(() => {
@@ -287,6 +301,7 @@ export default function Settings() {
             const pos = (ref: React.RefObject<HTMLDivElement | null>) => ref.current?.offsetTop || 0;
 
             const zambiaTaxPos = pos(zambiaTaxSettingsRef);
+            const tanzaniaTaxPos = pos(tanzaniaTaxSettingsRef);
             const joiningLetterPos = pos(joiningLetterSettingsRef);
             const experienceCertificatePos = pos(experienceCertificateSettingsRef);
             const nocPos = pos(nocSettingsRef);
@@ -305,7 +320,9 @@ export default function Settings() {
             const currencyPos = pos(currencySettingsRef);
             const brandPos = pos(brandSettingsRef);
 
-            if (scrollPosition >= zambiaTaxPos && zambiaTaxPos > 0) {
+            if (scrollPosition >= tanzaniaTaxPos && tanzaniaTaxPos > 0) {
+                setActiveSection('tanzania-tax-settings');
+            } else if (scrollPosition >= zambiaTaxPos && zambiaTaxPos > 0) {
                 setActiveSection('zambia-tax-settings');
             } else if (scrollPosition >= joiningLetterPos) {
                 setActiveSection('joining-letter-settings');
@@ -523,6 +540,20 @@ export default function Settings() {
                             <div className="space-y-6">
                                 {auth.user?.type === 'company' && <StatutoryRegistrationSettings settings={systemSettings} />}
                                 <ZambiaTaxSettings settings={zambiaTaxSettings} canEdit={auth.user?.type === 'superadmin'} />
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Tanzania Tax Settings — same rule as Zambia (Super Admin edits, companies see read-only) */}
+                    {(auth.user?.type === 'company' ||
+                        auth.user?.type === 'superadmin' ||
+                        auth.permissions?.includes('manage-tanzania-tax-settings')) && (
+                        <section id="tanzania-tax-settings" ref={tanzaniaTaxSettingsRef} className="mb-8">
+                            <div className="space-y-6">
+                                {auth.user?.type === 'company' && (
+                                    <CompanyCountrySettings currentCountry={companyCountry} />
+                                )}
+                                <TanzaniaTaxSettings settings={tanzaniaTaxSettings} canEdit={auth.user?.type === 'superadmin'} />
                             </div>
                         </section>
                     )}

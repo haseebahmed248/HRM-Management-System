@@ -96,8 +96,15 @@ class PayrollRunController extends Controller
                 return redirect()->back()->with('error', __('Payroll run not found.'));
             }
 
+            // Country code for the run's owning company — drives which
+            // deduction columns the show page renders (Zambia vs Tanzania).
+            $ownerCountry = strtoupper(
+                (string) (\App\Models\User::find($payrollRun->created_by)?->country_code ?? 'ZM')
+            );
+
             return Inertia::render('hr/payroll-runs/show', [
-                'payrollRun' => $payrollRun,
+                'payrollRun'   => $payrollRun,
+                'countryCode'  => $ownerCountry,
             ]);
         } else {
             return redirect()->back()->with('error', __('Permission Denied.'));

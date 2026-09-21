@@ -10,7 +10,8 @@ import { useTranslation } from 'react-i18next';
 
 export default function PayrollRunShow() {
     const { t } = useTranslation();
-    const { payrollRun, auth } = usePage().props as any;
+    const { payrollRun, auth, countryCode = 'ZM' } = usePage().props as any;
+    const isTanzania = countryCode === 'TZ';
     const permissions = auth?.permissions || [];
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [currentEntry, setCurrentEntry] = useState<any>(null);
@@ -103,17 +104,21 @@ export default function PayrollRunShow() {
         return Number(item?.amount) || 0;
     };
 
+    // Statutory deduction type tags per country. When Tanzania is set, the
+    // "additional" bucket excludes tanzania_* types instead of zambia_*.
+    const statutoryTypesForCountry = (): string[] => (
+        isTanzania
+            ? ['tanzania_paye', 'tanzania_nssf_employee']
+            : ['zambia_paye', 'zambia_napsa_employee', 'zambia_nhima_employee']
+    );
+
     /**
-     * Sum all deductions that are NOT statutory Zambia ones.
+     * Sum all deductions that are NOT statutory ones for this country.
      * These are additional salary-component deductions e.g. loans, advances.
      */
     const getAdditionalDeductions = (breakdown: any[]): number => {
         if (!Array.isArray(breakdown)) return 0;
-        const statutoryTypes = [
-            'zambia_paye',
-            'zambia_napsa_employee',
-            'zambia_nhima_employee',
-        ];
+        const statutoryTypes = statutoryTypesForCountry();
         return breakdown
             .filter((d: any) => d && !statutoryTypes.includes(d.type))
             .reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0);
@@ -125,11 +130,7 @@ export default function PayrollRunShow() {
      */
     const getAdditionalDeductionsLabel = (breakdown: any[]): string => {
         if (!Array.isArray(breakdown)) return '';
-        const statutoryTypes = [
-            'zambia_paye',
-            'zambia_napsa_employee',
-            'zambia_nhima_employee',
-        ];
+        const statutoryTypes = statutoryTypesForCountry();
         const items = breakdown.filter((d: any) => d && !statutoryTypes.includes(d.type));
         if (items.length === 0) return 'None';
         return items.map((d: any) => `${d.name}: ${window.appSettings?.formatCurrency(d.amount) ?? d.amount}`).join('\n');
@@ -312,33 +313,49 @@ export default function PayrollRunShow() {
                                         </span>
                                     ),
                                 },
+                                // Statutory deduction columns swap based on the run's country.
+                                // Zambia → PAYE / NAPSA / NHIMA. Tanzania → PAYE / NSSF.
                                 {
                                     key: 'deductions_breakdown',
                                     label: t('PAYE Tax'),
                                     render: (v: any[]) => (
                                         <span className="font-mono text-red-600">
-                                            {window.appSettings?.formatCurrency(getDeduction(v, 'zambia_paye'))}
+                                            {window.appSettings?.formatCurrency(
+                                                getDeduction(v, isTanzania ? 'tanzania_paye' : 'zambia_paye')
+                                            )}
                                         </span>
                                     ),
                                 },
-                                {
-                                    key: 'deductions_breakdown',
-                                    label: t('NAPSA'),
-                                    render: (v: any[]) => (
-                                        <span className="font-mono text-red-600">
-                                            {window.appSettings?.formatCurrency(getDeduction(v, 'zambia_napsa_employee'))}
-                                        </span>
-                                    ),
-                                },
-                                {
-                                    key: 'deductions_breakdown',
-                                    label: t('NHIMA'),
-                                    render: (v: any[]) => (
-                                        <span className="font-mono text-red-600">
-                                            {window.appSettings?.formatCurrency(getDeduction(v, 'zambia_nhima_employee'))}
-                                        </span>
-                                    ),
-                                },
+                                ...(isTanzania
+                                    ? [{
+                                        key: 'deductions_breakdown',
+                                        label: t('NSSF'),
+                                        render: (v: any[]) => (
+                                            <span className="font-mono text-red-600">
+                                                {window.appSettings?.formatCurrency(getDeduction(v, 'tanzania_nssf_employee'))}
+                                            </span>
+                                        ),
+                                    }]
+                                    : [
+                                        {
+                                            key: 'deductions_breakdown',
+                                            label: t('NAPSA'),
+                                            render: (v: any[]) => (
+                                                <span className="font-mono text-red-600">
+                                                    {window.appSettings?.formatCurrency(getDeduction(v, 'zambia_napsa_employee'))}
+                                                </span>
+                                            ),
+                                        },
+                                        {
+                                            key: 'deductions_breakdown',
+                                            label: t('NHIMA'),
+                                            render: (v: any[]) => (
+                                                <span className="font-mono text-red-600">
+                                                    {window.appSettings?.formatCurrency(getDeduction(v, 'zambia_nhima_employee'))}
+                                                </span>
+                                            ),
+                                        },
+                                    ]),
 
                                 // ── Additional component deductions column ──
                                 // Always rendered; shows $0.00 when none exist so the

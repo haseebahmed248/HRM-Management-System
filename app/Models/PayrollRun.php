@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\TanzaniaPayrollService;
 use App\Services\ZambiaPayrollService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
@@ -99,7 +100,13 @@ class PayrollRun extends BaseModel
         $this->save();
 
         try {
-            $zambiaService = new ZambiaPayrollService($this->created_by);
+            // Country routing: pick the payroll calculator for this company's
+            // configured country_code. Default to Zambia so existing tenants
+            // keep their exact behaviour when the column is null.
+            $companyRow = User::find($this->created_by);
+            $country    = strtoupper((string) ($companyRow->country_code ?? 'ZM'));
+            $zambiaService   = $country === 'ZM' ? new ZambiaPayrollService($this->created_by)   : null;
+            $tanzaniaService = $country === 'TZ' ? new TanzaniaPayrollService($this->created_by) : null;
 
             $query = Employee::with('user')
                 ->whereIn('created_by', getCompanyAndUsersId())
@@ -144,11 +151,24 @@ class PayrollRun extends BaseModel
                 $this->payrollEntries()->delete();
             }
 
+            // Total head-count for this run — Tanzania SDL uses it for the
+            // 10+ employees gate. Computed once and passed into each employee.
+            $totalEmployees = $employeeRecords->count();
+
             foreach ($employeeRecords as $employeeRecord) {
                 if (!$employeeRecord->user) {
                     continue;
                 }
-                $this->processEmployeePayroll($employeeRecord->user, $zambiaService, $employeeRecord);
+                if ($country === 'TZ') {
+                    $this->processEmployeePayrollTanzania(
+                        $employeeRecord->user,
+                        $tanzaniaService,
+                        $totalEmployees,
+                        $employeeRecord
+                    );
+                } else {
+                    $this->processEmployeePayroll($employeeRecord->user, $zambiaService, $employeeRecord);
+                }
             }
 
             $this->calculateTotals();
@@ -435,6 +455,267 @@ class PayrollRun extends BaseModel
             'total_deductions'       => $totalDeductions,   // ← now includes component deductions
             'gross_pay'              => $grossPay,
             'net_pay'                => $netPay,            // ← now correctly reduced
+            'working_days'           => $totalWorkingDays,
+            'present_days'           => $presentDays,
+            'half_days'              => $halfDays,
+            'holiday_days'           => $holidayDays,
+            'paid_leave_days'        => $leaveData['paid_leave_days'],
+            'unpaid_leave_days'      => $unpaidLeaveDays,
+            'absent_days'            => $absentDays,
+            'overtime_hours'         => $overtimeHours,
+            'overtime_amount'        => $overtimeAmount,
+            'per_day_salary'         => $perDaySalary,
+            'unpaid_leave_deduction' => $unpaidLeaveDeduction,
+            'earnings_breakdown'     => $earningsBreakdown,
+            'deductions_breakdown'   => $deductionsBreakdown,
+            'created_by'             => $this->created_by,
+        ]);
+    }
+
+    // ─── Process Single Employee (Tanzania) ──────────────────────────────────
+    //
+    // Country-routed variant of processEmployeePayroll. Shares the same
+    // salary/leave/attendance derivation as the Zambia path but swaps the
+    // statutory calculator for TanzaniaPayrollService and labels the
+    // deduction lines with the Tanzania statutory names (PAYE / NSSF / SDL
+    // / WCF). Head-count is passed in so SDL's 10-employee gate is evaluated
+    // consistently for the whole run.
+    private function processEmployeePayrollTanzania(
+        $employee,
+        TanzaniaPayrollService $tanzaniaService,
+        int $employeeCount,
+        $employeeRecord = null
+    ) {
+        $existingEntry = PayrollEntry::where('payroll_run_id', $this->id)
+            ->where('employee_id', $employee->id)
+            ->exists();
+
+        if ($existingEntry) {
+            return;
+        }
+
+        $companyId          = getCompanyId($this->created_by) ?? $this->created_by;
+        $globalSettings     = settings($companyId);
+        $workSchedule       = static::resolveWorkSchedule($globalSettings);
+        $workingDaysIndices = $workSchedule['working_days'];
+
+        if (empty($workingDaysIndices)) {
+            throw new \Exception(__('Please configure working days first.'));
+        }
+
+        $employeeSalary = EmployeeSalary::getActiveSalary($employee->id);
+        if (!$employeeSalary) {
+            return;
+        }
+
+        $totalWorkingDays = $workSchedule['days_per_month'];
+        $workingDaysPerWeek = $workSchedule['days_per_week'];
+        $hoursPerDay        = $workSchedule['hours_per_day'];
+        if (($employeeSalary->rate_type ?? 'monthly') !== 'monthly') {
+            $employeeSalary->basic_salary = $employeeSalary->basePayForPeriod(
+                $totalWorkingDays,
+                $workingDaysPerWeek,
+                $hoursPerDay
+            );
+        }
+
+        $salaryBreakdown = $employeeSalary->calculateAllComponents([
+            'period_start'     => $this->pay_period_start,
+            'period_end'       => $this->pay_period_end,
+            'proration_factor' => $this->componentProrationFactor(
+                $employee->id,
+                $employeeRecord?->date_of_joining,
+                $workingDaysIndices
+            ),
+        ]);
+
+        $attendanceRecords = AttendanceRecord::where('employee_id', $employee->id)
+            ->whereBetween('date', [$this->pay_period_start, $this->pay_period_end])
+            ->orderBy('date')
+            ->get();
+
+        $presentDays    = $attendanceRecords->whereIn('status', ['present', 'holiday'])->count();
+        $halfDays       = $attendanceRecords->where('status', 'half_day')->count();
+        $absentDays     = $attendanceRecords->where('status', 'absent')->count();
+        $holidayDays    = $attendanceRecords->where('status', 'holiday')->count();
+        $overtimeHours  = $attendanceRecords->sum('overtime_hours');
+        $overtimeAmount = $attendanceRecords->sum('overtime_amount');
+
+        $leaveData            = $this->getEmployeeLeaveData($employee->id);
+        $unpaidLeaveDays      = $leaveData['unpaid_leave_days'] + $absentDays + ($halfDays * 0.5);
+        $perDaySalary         = $totalWorkingDays > 0 ? $employeeSalary->basic_salary / $totalWorkingDays : 0;
+        $unpaidLeaveDeduction = $perDaySalary * $unpaidLeaveDays;
+
+        $totalEarnings     = $salaryBreakdown['total_earnings'];
+        $grossPay          = $totalEarnings - $unpaidLeaveDeduction + $overtimeAmount;
+        $componentEarnings = $totalEarnings - $employeeSalary->basic_salary;
+
+        // Tanzania re-uses the same exemption flags stored on the employee
+        // record. The columns were named for Zambia (exempt_from_napsa /
+        // exempt_from_nhima) — we re-use `exempt_from_napsa` as the NSSF
+        // exemption on the Tanzania side, since employers rarely need two
+        // separate exemption columns and NSSF is the direct analogue of
+        // NAPSA. exempt_from_paye + exempt_from_sdl re-use verbatim. WCF
+        // shares the SDL exemption because the two are always exempted
+        // together in Tanzania practice.
+        $exemptNssf = $employeeRecord?->exempt_from_napsa ?? false;
+        $exemptPaye = $employeeRecord?->exempt_from_paye  ?? false;
+        $exemptSdl  = $employeeRecord?->exempt_from_sdl   ?? false;
+        $exemptWcf  = $employeeRecord?->exempt_from_sdl   ?? false;
+
+        $otherTaxDeductibleDeductions = 0.0;
+        foreach ($salaryBreakdown['component_lines'] ?? [] as $line) {
+            if ($line['reduces_taxable_base'] ?? false) {
+                $otherTaxDeductibleDeductions += (float) $line['amount'];
+            }
+        }
+
+        $nonTaxableEarnings = 0.0;
+        $notionalTaxableEarnings = 0.0;
+        foreach ($salaryBreakdown['component_lines'] ?? [] as $line) {
+            if (($line['is_earning'] ?? false)
+                && ($line['is_cash'] ?? true)
+                && ! ($line['is_taxable'] ?? true)) {
+                $nonTaxableEarnings += (float) $line['amount'];
+            }
+            if (($line['is_earning'] ?? false)
+                && ($line['is_notional'] ?? false)
+                && ($line['is_taxable'] ?? true)
+                && ($line['increases_taxable_base'] ?? false)) {
+                $notionalTaxableEarnings += (float) $line['amount'];
+            }
+        }
+
+        $tanzania = $tanzaniaService->calculateFullPayroll(
+            $grossPay,
+            $employeeCount,
+            $exemptNssf,
+            $exemptPaye,
+            $exemptSdl,
+            $exemptWcf,
+            $nonTaxableEarnings,
+            $otherTaxDeductibleDeductions,
+            $notionalTaxableEarnings
+        );
+
+        // Component deductions (matches Zambia flow — recompute PAYE if the
+        // employee's remaining cash forces optional deductions to be trimmed).
+        $componentDeductionLines = [];
+        foreach ($salaryBreakdown['component_lines'] ?? [] as $line) {
+            if ($line['is_deduction'] ?? false) {
+                $componentDeductionLines[] = $line;
+            }
+        }
+
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            $componentDeductionLines = $this->applyComponentDeductionLimits(
+                $salaryBreakdown['component_lines'] ?? [],
+                max(0.0, $grossPay - $tanzania['total_deductions'])
+            );
+
+            $otherTaxDeductibleDeductions = 0.0;
+            foreach ($componentDeductionLines as $line) {
+                if ($line['reduces_taxable_base'] ?? false) {
+                    $otherTaxDeductibleDeductions += (float) $line['amount'];
+                }
+            }
+
+            $tanzania = $tanzaniaService->calculateFullPayroll(
+                $grossPay,
+                $employeeCount,
+                $exemptNssf,
+                $exemptPaye,
+                $exemptSdl,
+                $exemptWcf,
+                $nonTaxableEarnings,
+                $otherTaxDeductibleDeductions,
+                $notionalTaxableEarnings
+            );
+        }
+
+        $deductionsFromComponents = [];
+        foreach ($componentDeductionLines as $line) {
+            if ($line['affect_payslip'] ?? true) {
+                $deductionsFromComponents[] = $this->componentBreakdownLine($line);
+            }
+        }
+        $additionalDeductionsTotal = collect($componentDeductionLines)->sum('amount');
+        $totalDeductions = $tanzania['total_deductions'] + $additionalDeductionsTotal;
+        $netPay = $grossPay - $totalDeductions;
+
+        // Earnings breakdown
+        $earningsFromComponents = [];
+        foreach ($salaryBreakdown['component_lines'] ?? [] as $line) {
+            if (($line['is_earning'] ?? false) && ($line['affect_payslip'] ?? true)) {
+                $earningsFromComponents[] = $this->componentBreakdownLine($line);
+            }
+        }
+
+        $employerContributions = [];
+        foreach ($salaryBreakdown['component_lines'] ?? [] as $line) {
+            if (($line['is_employer_contribution'] ?? false) && ($line['affect_payslip'] ?? true)) {
+                $employerContributions[] = $this->componentBreakdownLine($line);
+            }
+        }
+        if (!$exemptNssf) {
+            $employerContributions[] = [
+                'name'   => 'NSSF Employer',
+                'amount' => $tanzania['nssf_employer'],
+                'type'   => 'tanzania_nssf_employer',
+                'is_employer_contribution' => true,
+                'print' => true,
+            ];
+        }
+        if (!$exemptSdl && ($tanzania['sdl'] ?? 0) > 0) {
+            $employerContributions[] = [
+                'name'   => 'SDL (Employer)',
+                'amount' => $tanzania['sdl'],
+                'type'   => 'tanzania_sdl',
+                'is_employer_contribution' => true,
+                'print' => true,
+            ];
+        }
+        if (!$exemptWcf && ($tanzania['wcf'] ?? 0) > 0) {
+            $employerContributions[] = [
+                'name'   => 'WCF (Employer)',
+                'amount' => $tanzania['wcf'],
+                'type'   => 'tanzania_wcf',
+                'is_employer_contribution' => true,
+                'print' => true,
+            ];
+        }
+
+        $earningsBreakdown = array_merge(
+            [['name' => 'Basic Salary', 'amount' => $employeeSalary->basic_salary, 'type' => 'basic_salary', 'print' => true]],
+            $earningsFromComponents,
+            $employerContributions
+        );
+
+        $statutoryDeductions = [];
+        if (!$exemptPaye) {
+            $statutoryDeductions[] = ['name' => 'PAYE Tax', 'amount' => $tanzania['paye'], 'type' => 'tanzania_paye', 'print' => true];
+        }
+        if (!$exemptNssf) {
+            $statutoryDeductions[] = [
+                'name'   => 'NSSF Employee',
+                'amount' => $tanzania['nssf_employee'],
+                'type'   => 'tanzania_nssf_employee',
+                'print'  => true,
+            ];
+        }
+
+        $deductionsBreakdown = array_merge($deductionsFromComponents, $statutoryDeductions);
+
+        PayrollEntry::create([
+            'payroll_run_id'         => $this->id,
+            'employee_id'            => $employee->id,
+            'employee_name'          => $employee->name,
+            'basic_salary'           => $employeeSalary->basic_salary,
+            'component_earnings'     => $componentEarnings,
+            'total_earnings'         => $totalEarnings,
+            'total_deductions'       => $totalDeductions,
+            'gross_pay'              => $grossPay,
+            'net_pay'                => $netPay,
             'working_days'           => $totalWorkingDays,
             'present_days'           => $presentDays,
             'half_days'              => $halfDays,
