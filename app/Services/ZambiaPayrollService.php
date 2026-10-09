@@ -167,17 +167,18 @@ class ZambiaPayrollService
         // An employee flagged exempt_from_paye pays zero PAYE.
         //
         // Non-taxable income components (salary components with is_taxable = false)
-        // are excluded from the PAYE base only: the employee still receives them
-        // in gross and net pay, and NAPSA / NHIMA are unaffected (they use raw
-        // gross / basic). This is the standard treatment of a tax-free allowance.
+        // are excluded from the PAYE, NAPSA and NHIMA bases (client requirement:
+        // unticking "Taxable" means no statutory deductions on that component).
+        // The employee still receives them in gross and net pay.
         // Other approved pre-tax deductions reduce PAYE gross in full. Zambia
         // pension remains a separate argument so its existing relief cap still applies.
         $payeGross = max(0.0, $grossPay + $notionalTaxableEarnings - $nonTaxableEarnings - $taxDeductibleDeductions);
         $paye  = $exemptPaye ? 0.0 : $this->calculatePAYE($payeGross, $pensionContribution);
-        $napsa = $this->calculateNAPSA($grossPay, $exemptNapsa);
+        $statutoryGross = max(0.0, $grossPay - $nonTaxableEarnings);
+        $napsa = $this->calculateNAPSA($statutoryGross, $exemptNapsa);
 
-        // ── NHIMA fix: use basicSalary, fallback to grossPay if not provided ──
-        $nhimaBase = $basicSalary > 0 ? $basicSalary : $grossPay;
+        // ── NHIMA: use basicSalary, fallback to statutory gross if not provided ──
+        $nhimaBase = $basicSalary > 0 ? $basicSalary : $statutoryGross;
         $nhima     = $this->calculateNHIMA($nhimaBase, $exemptNhima);
 
         // SDL (Skills Development Levy) is an employer levy of 0.5% of gross,
