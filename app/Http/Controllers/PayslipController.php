@@ -146,20 +146,14 @@ class PayslipController extends Controller
                     continue;
                 }
 
-                // Generate payslip number first so we can check for duplicates
+                if (Payslip::where('payroll_entry_id', $entryId)->exists()) {
+                    continue;
+                }
+
                 $payslipNumber = Payslip::generatePayslipNumber(
                     $payrollEntry->employee_id,
                     $payrollEntry->payrollRun->pay_date
                 );
-
-                // Check if payslip already exists by entry ID or payslip number
-                $exists = Payslip::where('payroll_entry_id', $entryId)
-                    ->orWhere('payslip_number', $payslipNumber)
-                    ->exists();
-
-                if ($exists) {
-                    continue;
-                }
 
                 Payslip::create([
                     'payroll_entry_id' => $entryId,
@@ -488,20 +482,14 @@ class PayslipController extends Controller
             $generatedCount = 0;
 
             foreach ($payrollEntries as $entry) {
-                // Generate payslip number first so we can check for duplicates
+                if (Payslip::where('payroll_entry_id', $entry->id)->exists()) {
+                    continue;
+                }
+
                 $payslipNumber = Payslip::generatePayslipNumber(
                     $entry->employee_id,
                     $entry->payrollRun->pay_date
                 );
-
-                // Check if payslip already exists by entry ID or payslip number
-                $exists = Payslip::where('payroll_entry_id', $entry->id)
-                    ->orWhere('payslip_number', $payslipNumber)
-                    ->exists();
-
-                if ($exists) {
-                    continue;
-                }
 
                 Payslip::create([
                     'payroll_entry_id' => $entry->id,

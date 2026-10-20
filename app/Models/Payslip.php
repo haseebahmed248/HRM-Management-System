@@ -66,8 +66,19 @@ class Payslip extends BaseModel
         $date = \Carbon\Carbon::parse($payDate);
         $prefix = 'PS-'.$date->format('Ym').'-';
         $employeeCode = str_pad($employeeId, 4, '0', STR_PAD_LEFT);
+        $base = $prefix.$employeeCode;
 
-        return $prefix.$employeeCode;
+        // Two runs paid in the same month (e.g. a corrected or off-cycle run)
+        // would otherwise produce the same number, and the unique index would
+        // block the second payslip. Suffix -2, -3 ... in that case.
+        $number = $base;
+        $n = 1;
+        while (static::where('payslip_number', $number)->exists()) {
+            $n++;
+            $number = $base.'-'.$n;
+        }
+
+        return $number;
     }
 
     /**
