@@ -327,14 +327,14 @@
         <table>
             <tr><th colspan="4" class="section-header">Loans &amp; Advances</th></tr>
             <tr>
-                <th>Reference</th>
-                <th class="amount">Amount (ZMW)</th>
+                <th>Loan / Advance</th>
+                <th class="amount">Loan Amount (ZMW)</th>
                 <th class="amount">Deducted This Period (ZMW)</th>
                 <th class="amount">Balance Remaining (ZMW)</th>
             </tr>
             @foreach ($loanItems as $loan)
                 <tr>
-                    <td>{{ $loan['name'] }} ({{ $loan['loan_reference'] ?? '' }})</td>
+                    <td>{{ ($loan['loan_type'] ?? '') === 'advance' ? 'Salary Advance' : 'Staff Loan' }} ({{ $loan['loan_reference'] ?? '' }})</td>
                     <td class="amount">{{ formatCurrency($loan['loan_amount'] ?? 0) }}</td>
                     <td class="amount">{{ formatCurrency($loan['amount'] ?? 0) }}</td>
                     <td class="amount">{{ formatCurrency($loan['balance_after'] ?? 0) }}</td>

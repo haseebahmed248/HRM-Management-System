@@ -474,7 +474,7 @@ export default function EmployeeLoans() {
 
       {/* Create / edit */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? t('Edit {{ref}}', { ref: editing.reference }) : t('New Loan / Advance')}</DialogTitle>
           </DialogHeader>
