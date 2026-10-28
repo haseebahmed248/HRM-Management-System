@@ -33,6 +33,7 @@ class SystemSettingsController extends Controller
             'sections.leave' => 'required|boolean',
             'sections.earnings_deductions' => 'required|boolean',
             'sections.employer_contributions' => 'required|boolean',
+            'sections.loans' => 'sometimes|boolean',
             'employee_fields' => 'required|array|size:10',
             'employee_fields.*.key' => "required|string|distinct|in:{$allowedFields}",
             'employee_fields.*.label' => 'required|string|max:80',

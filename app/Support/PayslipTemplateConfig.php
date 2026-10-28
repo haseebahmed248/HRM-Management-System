@@ -35,6 +35,7 @@ class PayslipTemplateConfig
                 'leave' => true,
                 'earnings_deductions' => true,
                 'employer_contributions' => true,
+                'loans' => true,
             ],
             'employee_fields' => [
                 ['key' => 'employee_name', 'label' => 'Employee Name', 'show' => true],

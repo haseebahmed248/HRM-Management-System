@@ -99,6 +99,7 @@ use App\Http\Controllers\CustomQuestionController;
 use App\Http\Controllers\DesignationController;
 use App\Http\Controllers\StaffTierController;
 use App\Http\Controllers\BankController;
+use App\Http\Controllers\EmployeeLoanController;
 use App\Http\Controllers\DocumentAcknowledgmentController;
 use App\Http\Controllers\DocumentCategoryController;
 use App\Http\Controllers\DocumentTemplateController;
@@ -1184,6 +1185,19 @@ Route::middleware(['auth', 'verified', 'setting'])->group(function () {
             [PayrollRunController::class, 'unlock'])->name('hr.payroll-runs.unlock');
 Route::put('payroll-runs/{id}/submit-final', [PayrollRunController::class, 'submitFinal'])->name('hr.payroll-runs.submit-final');
 Route::put('payroll-runs/{id}/approve-final',[PayrollRunController::class, 'approveFinal'])->name('hr.payroll-runs.approve-final');
+        });
+
+        // Loans & Advances routes (recovered after tax through payroll)
+        Route::middleware('permission:manage-employee-loans')->group(function () {
+            Route::get('hr/employee-loans', [EmployeeLoanController::class, 'index'])->name('hr.employee-loans.index');
+            Route::get('hr/employee-loans/export', [EmployeeLoanController::class, 'export'])->name('hr.employee-loans.export');
+            Route::post('hr/employee-loans', [EmployeeLoanController::class, 'store'])->middleware('permission:create-employee-loans')->name('hr.employee-loans.store');
+            Route::put('hr/employee-loans/{loan}', [EmployeeLoanController::class, 'update'])->middleware('permission:edit-employee-loans')->name('hr.employee-loans.update');
+            Route::delete('hr/employee-loans/{loan}', [EmployeeLoanController::class, 'destroy'])->middleware('permission:delete-employee-loans')->name('hr.employee-loans.destroy');
+            Route::put('hr/employee-loans/{loan}/toggle-pause', [EmployeeLoanController::class, 'togglePause'])->middleware('permission:edit-employee-loans')->name('hr.employee-loans.toggle-pause');
+            Route::put('hr/employee-loans/{loan}/cancel', [EmployeeLoanController::class, 'cancel'])->middleware('permission:edit-employee-loans')->name('hr.employee-loans.cancel');
+            Route::post('hr/employee-loans/{loan}/repayments', [EmployeeLoanController::class, 'storeRepayment'])->middleware('permission:edit-employee-loans')->name('hr.employee-loans.repayments.store');
+            Route::delete('hr/employee-loans/{loan}/repayments/{repayment}', [EmployeeLoanController::class, 'destroyRepayment'])->middleware('permission:edit-employee-loans')->name('hr.employee-loans.repayments.destroy');
         });
 
         // Payslips routes

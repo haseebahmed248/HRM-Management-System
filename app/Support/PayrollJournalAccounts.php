@@ -24,6 +24,7 @@ class PayrollJournalAccounts
         'sdl_payable'       => 'SDL Payable',
         'sdl_expense'       => 'SDL Employer Expense',
         'other_deductions'  => 'Other Deductions / Employee Advances',
+        'staff_loans'       => 'Staff Loans & Advances (asset)',
         'earnings_fallback' => 'Default Earning Code (unmapped components)',
     ];
 
@@ -41,6 +42,10 @@ class PayrollJournalAccounts
             'sdl_payable'       => '200-140',
             'sdl_expense'       => '600-450',
             'other_deductions'  => '200-130',
+            // Receivable from staff; recoveries credit it. Defaults to the existing
+            // Other Deductions code so journals keep posting where they did until
+            // the company sets its own asset account.
+            'staff_loans'       => '200-130',
             'earnings_fallback' => '600-100',
             // Keyword fallback for earning components with no account_code of their
             // own (matched against the lowercased component name). Not shown on the

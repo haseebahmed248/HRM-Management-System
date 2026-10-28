@@ -364,6 +364,14 @@ class PayrollRun extends BaseModel
         // ── FIXED: total deductions = statutory + component deductions ────────
         $totalDeductions = $zambia['total_deductions'] + $additionalDeductionsTotal;
 
+        // Loan / advance recoveries: post-tax, from the cash left after the
+        // deductions above, so gross and taxable pay are untouched.
+        [$loanLines, $loanTotal, $loanRepayments] = $this->loanRecoveryLines(
+            $employee->id,
+            $grossPay - $totalDeductions
+        );
+        $totalDeductions += $loanTotal;
+
         // ── FIXED: net pay correctly reflects all deductions ──────────────────
         $netPay = $grossPay - $totalDeductions;
 
@@ -443,9 +451,9 @@ class PayrollRun extends BaseModel
 
         // Component deductions come first, then statutory — so the payslip reads
         // "additional deductions → then statutory deductions"
-        $deductionsBreakdown = array_merge($deductionsFromComponents, $statutoryDeductions);
+        $deductionsBreakdown = array_merge($deductionsFromComponents, $statutoryDeductions, $loanLines);
 
-        PayrollEntry::create([
+        $entry = PayrollEntry::create([
             'payroll_run_id'         => $this->id,
             'employee_id'            => $employee->id,
             'employee_name'          => $employee->name,
@@ -470,6 +478,8 @@ class PayrollRun extends BaseModel
             'deductions_breakdown'   => $deductionsBreakdown,
             'created_by'             => $this->created_by,
         ]);
+
+        $this->recordLoanRepayments($entry, $loanRepayments);
     }
 
     // ─── Process Single Employee (Tanzania) ──────────────────────────────────
@@ -641,6 +651,12 @@ class PayrollRun extends BaseModel
         }
         $additionalDeductionsTotal = collect($componentDeductionLines)->sum('amount');
         $totalDeductions = $tanzania['total_deductions'] + $additionalDeductionsTotal;
+
+        [$loanLines, $loanTotal, $loanRepayments] = $this->loanRecoveryLines(
+            $employee->id,
+            $grossPay - $totalDeductions
+        );
+        $totalDeductions += $loanTotal;
         $netPay = $grossPay - $totalDeductions;
 
         // Earnings breakdown
@@ -704,9 +720,9 @@ class PayrollRun extends BaseModel
             ];
         }
 
-        $deductionsBreakdown = array_merge($deductionsFromComponents, $statutoryDeductions);
+        $deductionsBreakdown = array_merge($deductionsFromComponents, $statutoryDeductions, $loanLines);
 
-        PayrollEntry::create([
+        $entry = PayrollEntry::create([
             'payroll_run_id'         => $this->id,
             'employee_id'            => $employee->id,
             'employee_name'          => $employee->name,
@@ -731,6 +747,63 @@ class PayrollRun extends BaseModel
             'deductions_breakdown'   => $deductionsBreakdown,
             'created_by'             => $this->created_by,
         ]);
+
+        $this->recordLoanRepayments($entry, $loanRepayments);
+    }
+
+    /**
+     * Installments due this run for one employee, capped at the cash available
+     * after all other deductions. Any shortfall stays on the balance and is
+     * picked up by the next run.
+     *
+     * @return array{0: array, 1: float, 2: array}
+     */
+    private function loanRecoveryLines(int $employeeId, float $availableCash): array
+    {
+        $lines = [];
+        $repayments = [];
+        $availableCash = max(0.0, $availableCash);
+
+        foreach (EmployeeLoan::dueForPeriod($employeeId, $this->pay_period_end) as $loan) {
+            $balance = $loan->balance();
+            $due = $loan->dueInstallment($balance);
+            $amount = round(min($due, $availableCash), 2);
+            if ($amount <= 0) {
+                continue;
+            }
+            $availableCash -= $amount;
+
+            $lines[] = [
+                'name'             => $loan->recoveryLabel(),
+                'amount'           => $amount,
+                'type'             => 'loan_recovery',
+                'loan_id'          => $loan->id,
+                'loan_reference'   => $loan->reference,
+                'loan_type'        => $loan->loan_type,
+                'loan_amount'      => round((float) $loan->amount, 2),
+                'balance_after'    => round($balance - $amount, 2),
+                'requested_amount' => $due,
+                'print'            => true,
+            ];
+            $repayments[] = ['loan_id' => $loan->id, 'amount' => $amount];
+        }
+
+        return [$lines, round(array_sum(array_column($lines, 'amount')), 2), $repayments];
+    }
+
+    private function recordLoanRepayments(PayrollEntry $entry, array $repayments): void
+    {
+        foreach ($repayments as $repayment) {
+            EmployeeLoanRepayment::create([
+                'employee_loan_id' => $repayment['loan_id'],
+                'payroll_run_id'   => $this->id,
+                'payroll_entry_id' => $entry->id,
+                'amount'           => $repayment['amount'],
+                'paid_on'          => $this->pay_date ?? $this->pay_period_end,
+                'method'           => 'payroll',
+                'created_by'       => $this->created_by,
+            ]);
+        }
     }
 
     private function componentBreakdownLine(array $line): array

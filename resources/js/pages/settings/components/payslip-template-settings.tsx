@@ -43,6 +43,7 @@ export interface PayslipTemplateConfig {
         leave: boolean;
         earnings_deductions: boolean;
         employer_contributions: boolean;
+        loans: boolean;
     };
     employee_fields: EmployeeFieldConfig[];
 }
@@ -65,6 +66,7 @@ export default function PayslipTemplateSettings({ config }: PayslipTemplateSetti
         { key: 'leave', label: t('Leave details') },
         { key: 'earnings_deductions', label: t('Earnings and deductions') },
         { key: 'employer_contributions', label: t('Employer contributions') },
+        { key: 'loans', label: t('Loans and advances') },
     ];
 
     const updateEmployeeField = (index: number, changes: Partial<EmployeeFieldConfig>) => {

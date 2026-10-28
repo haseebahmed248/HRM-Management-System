@@ -869,6 +869,13 @@ export function AppSidebar() {
             });
         }
 
+        if (hasPermission(permissions, 'manage-employee-loans')) {
+            payrollChildren.push({
+                title: t('Loans & Advances'),
+                href: route('hr.employee-loans.index')
+            });
+        }
+
          if (hasPermission(permissions, 'manage-payslips')) {
             payrollChildren.push({
                 title: t('Payslips'),

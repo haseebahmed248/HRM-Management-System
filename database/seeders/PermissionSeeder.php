@@ -897,6 +897,13 @@ class PermissionSeeder extends Seeder
             ['name' => 'approve-payroll-runs', 'module' => 'payroll_runs', 'label' => 'Approve Payroll Runs', 'description' => 'Can approve and finalize payroll runs'],
             ['name' => 'import-payroll-runs', 'module' => 'payroll_runs', 'label' => 'Import Payroll Runs', 'description' => 'Can Import Payroll Runs'],
             ['name' => 'export-payroll-runs', 'module' => 'payroll_runs', 'label' => 'Export Payroll Runs', 'description' => 'Can Export Payroll Runs'],
+            ['name' => 'manage-employee-loans', 'module' => 'employee_loans', 'label' => 'Manage Loans & Advances', 'description' => 'Can manage salary advances and staff loans'],
+            ['name' => 'manage-any-employee-loans', 'module' => 'employee_loans', 'label' => 'Manage All Loans & Advances', 'description' => 'Manage Any Loans & Advances'],
+            ['name' => 'manage-own-employee-loans', 'module' => 'employee_loans', 'label' => 'Manage Own Loans & Advances', 'description' => 'Manage Limited Loans & Advances that is created by own'],
+            ['name' => 'view-employee-loans', 'module' => 'employee_loans', 'label' => 'View Loans & Advances', 'description' => 'View Loans & Advances'],
+            ['name' => 'create-employee-loans', 'module' => 'employee_loans', 'label' => 'Create Loans & Advances', 'description' => 'Can create loans and advances'],
+            ['name' => 'edit-employee-loans', 'module' => 'employee_loans', 'label' => 'Edit Loans & Advances', 'description' => 'Can edit, pause and settle loans and advances'],
+            ['name' => 'delete-employee-loans', 'module' => 'employee_loans', 'label' => 'Delete Loans & Advances', 'description' => 'Can delete loans and advances'],
             // track-a/11: senior / junior staff payroll separation. A user
             // needs at least one of these to see any employees / payroll
             // rows / report rows. Having both is functionally equivalent

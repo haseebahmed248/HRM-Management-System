@@ -639,7 +639,10 @@ class ZambiaReportController extends Controller
         }
 
         // Non-statutory deduction components, aggregated for itemised journal lines.
+        // Loan / advance recoveries go to one Staff Loans & Advances line instead:
+        // they reduce the company's receivable from staff, not a payable.
         $deductionComponents = [];
+        $loanRecovery = 0.0;
         foreach ($entries as $e) {
             foreach ($e->deductions_breakdown ?? [] as $line) {
                 if (!is_array($line)) {
@@ -647,6 +650,10 @@ class ZambiaReportController extends Controller
                 }
                 if (in_array($line['type'] ?? '', ['zambia_paye', 'zambia_napsa_employee', 'zambia_nhima_employee'], true)) {
                     continue; // statutory deductions are shown on their own lines below
+                }
+                if (($line['type'] ?? '') === 'loan_recovery') {
+                    $loanRecovery += (float) ($line['amount'] ?? 0);
+                    continue;
                 }
                 $name = $line['name'] ?? 'Deduction';
                 if (!isset($deductionComponents[$name])) {
@@ -729,6 +736,10 @@ class ZambiaReportController extends Controller
             $code = ($cid && isset($componentCodes[$cid])) ? $componentCodes[$cid] : $codes['other_deductions'];
             $addCredit($code, $name, $info['amount']);
             $itemisedOther += (float) $info['amount'];
+        }
+        if (round($loanRecovery, 2) != 0.0) {
+            $addCredit($codes['staff_loans'], 'Staff Loans & Advances Recovered', $loanRecovery);
+            $itemisedOther += $loanRecovery;
         }
         $residualOther = round($otherDed - $itemisedOther, 2);
         if ($residualOther != 0.0) {
@@ -1481,7 +1492,7 @@ class ZambiaReportController extends Controller
      *   ['type' => 'blank']
      *   ['type' => 'table',  'title?'  => string, 'headers' => [...], 'rows' => [[...], ...], 'totals?' => [...]]
      */
-    private function exportSections(string $format, string $baseName, array $sections): mixed
+    public function exportSections(string $format, string $baseName, array $sections): mixed
     {
         $sections = $this->withStandardReportFrame($sections);
 

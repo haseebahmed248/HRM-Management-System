@@ -48,7 +48,9 @@
                 continue;
             }
             $deductionsList[] = [
-                'name' => $value['name'] . (($value['compulsory'] ?? false) ? ' (Compulsory)' : ''),
+                'name' => $value['name']
+                    . (! empty($value['loan_reference']) ? ' (' . $value['loan_reference'] . ')' : '')
+                    . (($value['compulsory'] ?? false) ? ' (Compulsory)' : ''),
                 'amount' => $value['amount'],
             ];
         } else {
@@ -62,6 +64,11 @@
     if (($payrollEntry->unpaid_leave_deduction ?? 0) > 0) {
         $deductionsList[] = ['name' => 'Unpaid Leave Deduction', 'amount' => $payrollEntry->unpaid_leave_deduction];
     }
+
+    $loanItems = array_values(array_filter(
+        is_array($rawDeductions) ? $rawDeductions : [],
+        fn ($value) => is_array($value) && ($value['type'] ?? null) === 'loan_recovery'
+    ));
 
     $maxRows = max(count($earningsList), count($deductionsList), 1);
     $totalEarnings = $payrollEntry->total_earnings + $payrollEntry->overtime_amount;
@@ -313,6 +320,26 @@
                 <td colspan="3">NET PAY</td>
                 <td class="amount">{{ formatCurrency($payrollEntry->net_pay) }}</td>
             </tr>
+        </table>
+    @endif
+
+    @if (($templateConfig['sections']['loans'] ?? true) && count($loanItems) > 0)
+        <table>
+            <tr><th colspan="4" class="section-header">Loans &amp; Advances</th></tr>
+            <tr>
+                <th>Reference</th>
+                <th class="amount">Amount (ZMW)</th>
+                <th class="amount">Deducted This Period (ZMW)</th>
+                <th class="amount">Balance Remaining (ZMW)</th>
+            </tr>
+            @foreach ($loanItems as $loan)
+                <tr>
+                    <td>{{ $loan['name'] }} ({{ $loan['loan_reference'] ?? '' }})</td>
+                    <td class="amount">{{ formatCurrency($loan['loan_amount'] ?? 0) }}</td>
+                    <td class="amount">{{ formatCurrency($loan['amount'] ?? 0) }}</td>
+                    <td class="amount">{{ formatCurrency($loan['balance_after'] ?? 0) }}</td>
+                </tr>
+            @endforeach
         </table>
     @endif
 
