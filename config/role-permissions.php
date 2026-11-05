@@ -105,6 +105,7 @@ return [
         'timesheet_approvals',
         'attendance_regularizations',
         'payroll_runs',
+        'employee_loans',
         'leave_balances',
         'payslips',
         'payroll_adjustments',

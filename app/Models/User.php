@@ -1388,6 +1388,14 @@ class User extends BaseAuthenticatable implements MustVerifyEmail
             'delete-payroll-runs',
             'process-payroll-runs',
 
+            // Loans & Advances (recovered through payroll)
+            'manage-employee-loans',
+            'manage-any-employee-loans',
+            'view-employee-loans',
+            'create-employee-loans',
+            'edit-employee-loans',
+            'delete-employee-loans',
+
             // Payslips management
             'manage-payslips',
             'manage-any-payslips',
